@@ -12,9 +12,9 @@ provider "proxmox" {
   pm_tls_insecure = true
 }
 
-resource "proxmox_vm_qemu" "ubuntu_noble_cloudinit" {
+resource "proxmox_vm_qemu" "cloudinit" {
   vmid = 100
-  name = "ubuntu-noble-cloudinit"
-  cores = 2
-  memory = 2048
+  name = var.vm_name
+  cores = var.cores
+  memory = var.memory
 }
