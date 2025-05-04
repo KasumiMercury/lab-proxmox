@@ -1,5 +1,6 @@
 resource "proxmox_vm_qemu" "cloudinit" {
   os_type    = "cloud-init"
+  clone     = var.template
 
   vmid        = var.vmid
   name        = var.vm_name
@@ -25,7 +26,7 @@ resource "proxmox_vm_qemu" "cloudinit" {
     ide {
       ide1 {
         cloudinit {
-          storage = "local-lvm"
+          storage = var.cloudinit_storage
         }
       }
     }
