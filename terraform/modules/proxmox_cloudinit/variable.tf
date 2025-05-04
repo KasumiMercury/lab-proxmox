@@ -13,6 +13,11 @@ variable "vm_name" {
   type        = string
 }
 
+
+/*
+  # Optional variables
+  # Hardware configuration
+*/
 variable "cores" {
   description = "Number of CPU cores"
   type        = number
@@ -25,6 +30,9 @@ variable "memory" {
   default     = 4096
 }
 
+/*
+  # Network configuration
+*/
 variable "ip_address" {
   description = "IP address of the VM"
   type        = string
@@ -35,12 +43,31 @@ variable "gateway" {
   type        = string
 }
 
+variable "network_bridge" {
+  description = "Network bridge to use"
+  type        = string
+  default     = "vmbr0"
+}
+
+variable "network_tag" {
+  description = "VLAN tag for the network interface"
+  type        = number
+  default     = 0
+}
+
+/*
+  # Optional variables
+  # Disk configuration
+*/
 variable "disk_size" {
   description = "Size of the disk in GB"
   type        = number
   default     = 32
 }
 
+/*
+  # User configuration
+*/
 variable "username" {
   description = "Username"
   type        = string
