@@ -30,6 +30,11 @@ variable "ip_address" {
   type        = string
 }
 
+variable "gateway" {
+  description = "Gateway for the VM"
+  type        = string
+}
+
 variable "disk_size" {
   description = "Size of the disk in GB"
   type        = number
