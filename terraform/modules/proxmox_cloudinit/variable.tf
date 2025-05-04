@@ -77,3 +77,17 @@ variable "password" {
   description = "Password"
   type        = string
 }
+
+/*
+  # Cloud-init configuration
+  # Commonly used for cloud-init configuration
+*/
+variable "cloudinit_storage" {
+  description = "Storage for cloud-init disk"
+  type        = string
+}
+
+variable "template" {
+  description = "Template to clone from"
+  type        = string
+}
