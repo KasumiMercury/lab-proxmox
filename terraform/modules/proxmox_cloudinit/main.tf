@@ -1,7 +1,7 @@
 resource "proxmox_vm_qemu" "cloudinit" {
   os_type    = "cloud-init"
 
-  vmid        = 100
+  vmid        = var.vmid
   name        = var.vm_name
   target_node = var.target_node
 
