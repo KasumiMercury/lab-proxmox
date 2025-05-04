@@ -1,6 +1,9 @@
-resource "proxmox_vm_qemu" "cloudinit" {
+resource "proxmox_vm_qemu" "basic_cloudinit" {
   os_type    = "cloud-init"
   clone     = var.template
+  boot = "order=scsi0"
+  full_clone = true
+  scsihw = "virtio-scsi-single"
 
   vmid        = var.vmid
   name        = var.vm_name
@@ -10,8 +13,6 @@ resource "proxmox_vm_qemu" "cloudinit" {
 
   cores  = var.cores
   memory = var.memory
-
-  boot = "order=scsi0"
 
   ipconfig0 = "ip=${var.ip_address}/24,gw=${var.gateway},ip6=dhcp"
 
