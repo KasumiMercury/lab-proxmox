@@ -78,6 +78,11 @@ variable "password" {
   type        = string
 }
 
+variable "password_length" {
+  description = "Length of the password"
+  type        = number
+}
+
 variable "ssh_key_path" {
   description = "Path to the SSH public key"
   type        = string
