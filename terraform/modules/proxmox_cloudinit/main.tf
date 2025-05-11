@@ -1,3 +1,8 @@
+resource "random_password" "password" {
+  length  = var.password_length
+  special = true
+}
+
 resource "proxmox_vm_qemu" "basic_cloudinit" {
   os_type    = "cloud-init"
   clone     = var.template
@@ -17,7 +22,8 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
   ipconfig0 = "ip=${var.ip_address}/24,gw=${var.gateway},ip6=dhcp"
 
   ciuser     = var.username
-  cipassword = var.password
+  # cipassword = var.password
+  cipassword = random_password.password.result
   sshkeys    = file(var.ssh_key_path)
 
   serial {
