@@ -12,14 +12,14 @@ module "proxmox_cloudinit" {
 
   vmid              = 300
   vm_name           = "test-vm"
-  template          = "ubuntu-server-2404-template"
+  template          = "noble-template"
   target_node       = "hod"
   ip_address        = "192.168.110.111"
   gateway           = "192.168.110.1"
-  network_bridge    = "vmbr0"
+  network_bridge    = "vmbr100"
   network_tag       = 0
   cloudinit_storage = "strix0"
-  username          = "test-user"
+  username          = "test"
   password_length = 16
 }
 
