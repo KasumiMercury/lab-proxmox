@@ -78,6 +78,12 @@ variable "password" {
   type        = string
 }
 
+variable "ssh_key_path" {
+  description = "Path to the SSH public key"
+  type        = string
+  default     = "~/.ssh/id_ed25519.pub"
+}
+
 /*
   # Cloud-init configuration
   # Commonly used for cloud-init configuration
