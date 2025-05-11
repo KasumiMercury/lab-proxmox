@@ -73,10 +73,10 @@ variable "username" {
   type        = string
 }
 
-variable "password" {
-  description = "Password"
-  type        = string
-}
+# variable "password" {
+#   description = "Password"
+#   type        = string
+# }
 
 variable "password_length" {
   description = "Length of the password"
