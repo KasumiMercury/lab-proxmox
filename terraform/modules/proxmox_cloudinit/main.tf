@@ -7,7 +7,7 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
   os_type    = "cloud-init"
   clone     = var.template
   boot = "order=scsi0"
-  full_clone = true
+  full_clone = false
   scsihw = "virtio-scsi-single"
 
   vmid        = var.vmid
