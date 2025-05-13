@@ -1,4 +1,3 @@
-// ...existing code...
 variable "template" {
   description = "Template to clone from"
   type        = string
