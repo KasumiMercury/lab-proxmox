@@ -71,22 +71,20 @@ variable "disk_size" {
 variable "username" {
   description = "Username"
   type        = string
+  sensitive = true
 }
-
-# variable "password" {
-#   description = "Password"
-#   type        = string
-# }
 
 variable "password_length" {
   description = "Length of the password"
   type        = number
+  sensitive = true
 }
 
 variable "ssh_key_path" {
   description = "Path to the SSH public key"
   type        = string
   default     = "~/.ssh/id_ed25519.pub"
+  sensitive = true
 }
 
 /*
