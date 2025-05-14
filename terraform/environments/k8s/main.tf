@@ -1,4 +1,5 @@
 terraform {
+  required_version = ">= 1.11" 
   required_providers {
     proxmox = {
       source  = "Telmate/proxmox"
@@ -16,7 +17,7 @@ locals {
     for vm_key, vm_instance in var.virtual_machines :
     vm_key => merge(
       vm_instance,
-      lookup(var.credentials_vm, vm_key)
+      var.credentials_vm[vm_key]
     )
   }
 }
