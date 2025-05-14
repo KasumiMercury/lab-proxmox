@@ -77,7 +77,6 @@ variable "username" {
 variable "password_length" {
   description = "Length of the password"
   type        = number
-  sensitive = true
 }
 
 variable "ssh_key_path" {

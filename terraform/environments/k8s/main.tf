@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     proxmox = {
-      source = "Telmate/proxmox"
+      source  = "Telmate/proxmox"
       version = "3.0.1-rc8"
     }
     random = {
@@ -11,8 +11,19 @@ terraform {
   }
 }
 
+locals {
+  vm_configurations = {
+    for vm_key, vm_instance in var.virtual_machines :
+    vm_key => merge(
+      vm_instance,
+      lookup(var.credentials_vm, vm_key)
+    )
+  }
+}
+
 module "proxmox_cloudinit" {
-  for_each = var.virtual_machines
+  # for_each = var.virtual_machines
+  for_each = local.vm_configurations
   source   = "../../modules/proxmox_cloudinit"
 
   vmid              = each.value.vmid
@@ -35,5 +46,5 @@ output "vm_passwords" {
     for vm_key, vm_instance in module.proxmox_cloudinit :
     vm_key => vm_instance.password
   }
-  sensitive   = true 
+  sensitive = true
 }
