@@ -50,7 +50,7 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
 
   network {
     id       = 0
-    bridge   = "${var.network_bridge}"
+    bridge   = var.network_bridge
     tag      = var.network_tag
     model    = "virtio"
     firewall = true
