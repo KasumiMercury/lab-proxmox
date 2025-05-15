@@ -20,7 +20,6 @@ variable "virtual_machines" {
     network_tag    = optional(number, 0)
     disk_size      = optional(number, 32)
   }))
-  default = {}
 }
 
 variable "credentials_vm" {
@@ -32,5 +31,4 @@ variable "credentials_vm" {
     password_length = number
     ssh_key_path    = optional(string, "~/.ssh/id_ed25519.pub")
   }))
-  default = {}
 }
