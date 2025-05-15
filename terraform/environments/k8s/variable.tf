@@ -16,8 +16,6 @@ variable "virtual_machines" {
     vm_name        = string
     cores          = optional(number, 2)
     memory         = optional(number, 4096)
-    ip_address     = string
-    gateway        = string
     network_bridge = optional(string, "vmbr0")
     network_tag    = optional(number, 0)
     disk_size      = optional(number, 32)
@@ -28,6 +26,8 @@ variable "virtual_machines" {
 variable "credentials_vm" {
   description = "Credentials for the VM"
   type = map(object({
+    ip_address     = string
+    gateway        = string
     username        = string
     password_length = number
     ssh_key_path    = optional(string, "~/.ssh/id_ed25519.pub")
