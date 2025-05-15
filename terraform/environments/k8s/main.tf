@@ -37,7 +37,11 @@ locals {
     for vm_key, vm_instance in var.virtual_machines :
     vm_key => merge(
       vm_instance,
-      var.credentials_vm[vm_key]
+      var.credentials_vm[vm_key],
+      {
+        cloudinit_storage = var.cloudinit_storage
+        template = var.template
+      }
     )
   }
 }
@@ -49,13 +53,13 @@ module "proxmox_cloudinit" {
 
   vmid              = each.value.vmid
   vm_name           = each.value.vm_name
-  template          = var.template
+  template          = each.value.template
   target_node       = each.value.target_node
   ip_address        = each.value.ip_address
   gateway           = each.value.gateway
   network_bridge    = each.value.network_bridge
   network_tag       = each.value.network_tag
-  cloudinit_storage = var.cloudinit_storage
+  cloudinit_storage = each.value.cloudinit_storage
   username          = each.value.username
   password_length   = each.value.password_length
   ssh_key_path      = each.value.ssh_key_path
