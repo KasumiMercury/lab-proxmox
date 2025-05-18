@@ -36,3 +36,18 @@ jobs:
 
             - name: Run TFlint
               run: tflint --recursive -f compact
+    Plan:
+        name: Plan
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: ./terraform
+        steps:
+          - name: Tailscale
+            uses: tailscale/github-action@v3
+            with:
+              oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+              oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+              tags: tag:ci
+          - name: Check connection
+            run: ping -c 1 ${{ secrets.PM_API_URL}}
