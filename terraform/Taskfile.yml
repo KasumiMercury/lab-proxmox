@@ -35,3 +35,29 @@ tasks:
         task: push-secrets
         vars:
           CLI_ARGS: "{{.ITEM}}"
+
+  gpg-encrypt-file:
+    desc: "Encrypts tfvars.json file with GPG"
+    dir: "{{.USER_WORKING_DIR}}"
+    silent: true
+    vars:
+      TARGET_FILE: "{{.CLI_ARGS}}"
+    dotenv: ['.env']
+    cmds:
+      - echo $GPG_PASS | gpg --symmetric --cipher-algo AES256 --output {{ .TARGET_FILE }}.gpg --batch --passphrase-fd 0 {{ .TARGET_FILE }}
+      - echo "Encrypted file \:\ {{ .TARGET_FILE }}.gpg"
+
+  encrypt-tfvars-json:
+    aliases:
+      - encrypt
+    desc: "Encrypts the content of all files ending with tfvars.json in the specified directory"
+    dir: "{{.USER_WORKING_DIR}}"
+    silent: true
+    vars:
+      FILES:
+        sh: find {{.CLI_ARGS}} -name "*tfvars.json" -type f -print0
+    cmds:
+      - for: { var: FILES }
+        task: gpg-encrypt-file
+        vars:
+          CLI_ARGS: "{{.ITEM}}"
