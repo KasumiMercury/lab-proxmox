@@ -6,21 +6,32 @@ tasks:
     dir: "{{.USER_WORKING_DIR}}"
     silent: true
     vars:
-      encoded: "{{cat .CLI_ARGS | b64enc}}"
-      secret_name: "{{.CLI_ARGS | fromSlash | splitList \"/\" | last | replace \".tfvars.json\" \"\" | replace \" \" \"_\" | replace \"-\" \"_\" | replace \".\" \"_\" | upper}}"
+      DATA:
+        sh: cat {{.CLI_ARGS}}
+      FILE_NAME: "{{base .CLI_ARGS}}"
+      ENCODED: "{{ b64enc .DATA }}"
+      SECRET_NAME: "{{.FILE_NAME | replace \".tfvars.json\" \"\" | replace \".auto\" \"\" | replace \" \" \"_\" | replace \"-\" \"_\" | replace \".\" \"_\" | upper}}"
     cmds:
-      - echo {{ .encoded }}
-      - echo {{ .secret_name }}
+      - echo "{{ .DATA }}"
+      - echo "{{ .SECRET_NAME }}"
+      - echo "{{ .ENCODED }}"
+      - task: warning
+      - gh secret set {{ .SECRET_NAME }} --body {{ .ENCODED }}
 
-  push-tfvars:
+  warning:
+    prompt: "Are you sure?"
+
+  push-tfvars-json:
+    aliases:
+      - push
     desc: "Encodes the content of all files ending with tfvars.json in the specified directory"
     dir: "{{.USER_WORKING_DIR}}"
     silent: true
     vars:
-      files:
+      FILES:
         sh: find {{.CLI_ARGS}} -name "*tfvars.json" -type f -print0
     cmds:
-      - for: { var: files }
+      - for: { var: FILES }
         task: push-secrets
         vars:
           CLI_ARGS: "{{.ITEM}}"
