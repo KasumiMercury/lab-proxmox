@@ -1,0 +1,25 @@
+version: '3'
+
+tasks:
+  push-secrets:
+    desc: "Encodes JSON file and push it to GitHub Actions secrets"
+    dir: "{{.USER_WORKING_DIR}}"
+    silent: true
+    vars:
+      encoded: '{{b64enc .CLI_ARGS}}'
+    cmds:
+      - echo {{ .encoded }}
+
+  push-tfvars:
+    desc: "Encodes the content of all files ending with tfvars.json in the specified directory"
+    dir: "{{.USER_WORKING_DIR}}"
+    silent: true
+    vars:
+      files:
+        sh: find {{.CLI_ARGS}} -name "*tfvars.json" -type f -print0
+    cmds:
+      - for: { var: files }
+        task: push-secrets
+        vars:
+          CLI_ARGS:
+            sh: cat {{.ITEM}}
