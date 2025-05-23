@@ -6,9 +6,11 @@ tasks:
     dir: "{{.USER_WORKING_DIR}}"
     silent: true
     vars:
-      encoded: '{{b64enc .CLI_ARGS}}'
+      encoded: "{{cat .CLI_ARGS | b64enc}}"
+      secret_name: "{{.CLI_ARGS | fromSlash | splitList \"/\" | last | replace \".tfvars.json\" \"\" | replace \" \" \"_\" | replace \"-\" \"_\" | replace \".\" \"_\" | upper}}"
     cmds:
       - echo {{ .encoded }}
+      - echo {{ .secret_name }}
 
   push-tfvars:
     desc: "Encodes the content of all files ending with tfvars.json in the specified directory"
@@ -21,5 +23,4 @@ tasks:
       - for: { var: files }
         task: push-secrets
         vars:
-          CLI_ARGS:
-            sh: cat {{.ITEM}}
+          CLI_ARGS: "{{.ITEM}}"
