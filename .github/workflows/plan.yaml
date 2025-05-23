@@ -47,9 +47,30 @@ jobs:
         name: Select environment
         runs-on: ubuntu-latest
         if : ${{ github.event_name == 'workflow_dispatch' }}
+        outputs:
+            target_env: ${{ steps.set_env.outputs.target_env }}
+        defaults:
+            run:
+                working-directory: ./terraform/environments
         steps:
           - name: Checkout code
             uses: actions/checkout@v4
+          
+          - name: Select environment
+            id: set_env
+            # find the directory name that matches the input
+            run: |
+              # Get the list of directories in the current directory
+              dirs=$(ls -d */)
+              # Check if the input matches any directory name
+              for dir in $dirs; do
+                if [[ "$dir" == "${{ github.event.inputs.target_env }}"* ]]; then
+                  echo "Found matching directory: $dir"
+                  echo "ENVIRONMENT=${dir%/}" >> $GITHUB_ENV
+                  break
+                fi
+              done
+
     Extract_environment:
         name: Extract environment
         runs-on: ubuntu-latest
