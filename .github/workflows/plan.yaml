@@ -49,15 +49,16 @@ jobs:
         if : ${{ github.event_name == 'workflow_dispatch' }}
         outputs:
             target_env: ${{ steps.set_env.outputs.target_env }}
-        defaults:
-            run:
-                working-directory: ./terraform/environments
+        # defaults:
+        #     run:
+        #         working-directory: ./terraform/environments
         steps:
           - name: Checkout code
             uses: actions/checkout@v4
           
           - name: List environments
             id: list_env
+            working-directory: ./terraform/environments
             run: echo "environments=$(ls -d */ | jq -Rsc 'split("\n")[0:-1] | map(gsub("/"; ""))')" >> $GITHUB_OUTPUT
 
           - name: Select environment
@@ -65,7 +66,11 @@ jobs:
             # find the directory name that matches the input
             run: |
               chmod +x .github/workflows/select_env.sh
-              .github/workflows/select_env.sh ${{ steps.list_env.outputs.environments }} ${{ github.event.inputs.target_env }}
+
+              selected_env=$(.github/workflows/select_env.sh '${{ steps.list_env.outputs.environments }}' '${{ github.event.inputs.target_env }}')
+              echo "Selected environments: $selected_env"
+
+              echo "target_env=$selected_env" >> $GITHUB_OUTPUT
 
     Extract_environment:
         name: Extract environment
