@@ -56,15 +56,20 @@ jobs:
           - name: Checkout code
             uses: actions/checkout@v4
           
+          - name: List environments
+            id: list_env
+            run: echo "ENVIRONMENTS=$(ls -d */ | jq -Rsc 'split("\n")[0:-1] | map(gsub("/"; ""))')" >> $GITHUB_OUTPUT
+
           - name: Select environment
             id: set_env
             # find the directory name that matches the input
             run: |
+              echo "Input: ${{ inputs.target_env }}"
               # Get the list of directories in the current directory
               dirs=$(ls -d */)
               # Check if the input matches any directory name
               for dir in $dirs; do
-                if [[ "$dir" == "${{ github.event.inputs.target_env }}"* ]]; then
+                if [[ "$dir" == "${{ inputs.target_env }}"* ]]; then
                   echo "Found matching directory: $dir"
                   echo "ENVIRONMENT=${dir%/}" >> $GITHUB_ENV
                   break
