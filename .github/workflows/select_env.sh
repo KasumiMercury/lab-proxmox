@@ -11,7 +11,6 @@ if [ -z "$target" ]; then
 fi
 
 # get all environments from /terraform/environments directory
-echo $(pwd)
 all_environments=$(find ./terraform/environments -maxdepth 1 -mindepth 1 -type d -exec basename {} \; | jq -R . | jq -s . | jq -c .)
 echo "All environments: $all_environments"
 
