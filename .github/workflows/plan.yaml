@@ -58,23 +58,33 @@ jobs:
           
           - name: List environments
             id: list_env
-            run: echo "ENVIRONMENTS=$(ls -d */ | jq -Rsc 'split("\n")[0:-1] | map(gsub("/"; ""))')" >> $GITHUB_OUTPUT
+            run: echo "environments=$(ls -d */ | jq -Rsc 'split("\n")[0:-1] | map(gsub("/"; ""))')" >> $GITHUB_OUTPUT
 
           - name: Select environment
             id: set_env
             # find the directory name that matches the input
             run: |
-              echo "Input: ${{ inputs.target_env }}"
-              # Get the list of directories in the current directory
-              dirs=$(ls -d */)
-              # Check if the input matches any directory name
-              for dir in $dirs; do
-                if [[ "$dir" == "${{ inputs.target_env }}"* ]]; then
-                  echo "Found matching directory: $dir"
-                  echo "ENVIRONMENT=${dir%/}" >> $GITHUB_ENV
-                  break
-                fi
-              done
+              ENVIRONMENTS=${{ steps.list_env.outputs.environments }}
+              echo "Available environments: $ENVIRONMENTS"
+              echo "Input target_env: ${{ inputs.target_env }}"
+              
+              target_env=()
+
+              if [[ "${{ inputs.target_env }}" == "all" ]]; then
+                target_env=($ENVIRONMENTS)
+              else
+                while read -r $ENVIRONMENTS; do
+                  if [[ "$ENVIRONMENTS" == *"${{ inputs.target_env }}"* ]]; then
+                    target_env+=("$ENVIRONMENTS")
+                    break
+                  fi
+                done <<< "$ENVIRONMENTS"
+              fi
+
+              # convert target_env array to JSON
+              target_env_json=$(printf '%s\n' "${target_env[@]}" | jq -R . | jq -s .)
+              echo "target_env_json: $target_env_json"
+
 
     Extract_environment:
         name: Extract environment
