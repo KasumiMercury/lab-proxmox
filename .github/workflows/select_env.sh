@@ -3,17 +3,17 @@
 # all_environments: all environments to be selected from
 # provided as a JSON array string
 # example: '["dev", "staging", "prod"]'
-all_environments=$1
-target=$2
+target=$1
 
-if [ -z "$all_environments" ]; then
-  echo "No environments provided. Exiting."
-  exit 1
-fi
 if [ -z "$target" ]; then
   echo "No target environment provided. Exiting."
   exit 1
 fi
+
+# get all environments from /terraform/environments directory
+echo $(pwd)
+all_environments=$(find ./terraform/environments -maxdepth 1 -mindepth 1 -type d -exec basename {} \; | jq -R . | jq -s . | jq -c .)
+echo "All environments: $all_environments"
 
 target_env=()
 
