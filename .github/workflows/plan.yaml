@@ -64,27 +64,8 @@ jobs:
             id: set_env
             # find the directory name that matches the input
             run: |
-              ENVIRONMENTS=${{ steps.list_env.outputs.environments }}
-              echo "Available environments: $ENVIRONMENTS"
-              echo "Input target_env: ${{ inputs.target_env }}"
-              
-              target_env=()
-
-              if [[ "${{ inputs.target_env }}" == "all" ]]; then
-                target_env=($ENVIRONMENTS)
-              else
-                while read -r $ENVIRONMENTS; do
-                  if [[ "$ENVIRONMENTS" == *"${{ inputs.target_env }}"* ]]; then
-                    target_env+=("$ENVIRONMENTS")
-                    break
-                  fi
-                done <<< "$ENVIRONMENTS"
-              fi
-
-              # convert target_env array to JSON
-              target_env_json=$(printf '%s\n' "${target_env[@]}" | jq -R . | jq -s .)
-              echo "target_env_json: $target_env_json"
-
+              chmod +x .github/workflows/select_env.sh
+              .github/workflows/select_env.sh ${{ steps.list_env.outputs.environments }} ${{ github.event.inputs.target_env }}
 
     Extract_environment:
         name: Extract environment
