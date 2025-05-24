@@ -52,11 +52,6 @@ jobs:
         steps:
           - name: Checkout code
             uses: actions/checkout@v4
-          
-          - name: List environments
-            id: list_env
-            working-directory: ./terraform/environments
-            run: echo "environments=$(ls -d */ | jq -Rsc 'split("\n")[0:-1] | map(gsub("/"; ""))')" >> $GITHUB_OUTPUT
 
           - name: Select environment
             id: set_env
@@ -72,7 +67,7 @@ jobs:
     Plan:
         name: Plan
         runs-on: ubuntu-latest
-        needs: [Select_environment]
+        needs: [Lint, Select_environment]
         steps:
           - name: Tailscale
             uses: tailscale/github-action@v3
