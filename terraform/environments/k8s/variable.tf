@@ -29,6 +29,6 @@ variable "credentials_vm" {
     gateway        = string
     username        = string
     password_length = number
-    ssh_key_path    = optional(string, "~/.ssh/id_ed25519.pub")
+    ssh_key = string
   }))
 }

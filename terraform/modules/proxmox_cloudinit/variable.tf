@@ -79,11 +79,10 @@ variable "password_length" {
   type        = number
 }
 
-variable "ssh_key_path" {
-  description = "Path to the SSH public key"
+variable "ssh_key" {
+  description = "SSH public key"
   type        = string
-  default     = "~/.ssh/id_ed25519.pub"
-  sensitive = true
+  sensitive   = true
 }
 
 /*

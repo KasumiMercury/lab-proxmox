@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.11" 
+  required_version = ">= 1.11"
   backend "s3" {
     bucket                      = "terraform"
     key                         = "proxmox/k8s/terraform.tfstate"
@@ -40,7 +40,7 @@ locals {
       var.credentials_vm[vm_key],
       {
         cloudinit_storage = var.cloudinit_storage
-        template = var.template
+        template          = var.template
       }
     )
   }
@@ -62,7 +62,7 @@ module "proxmox_cloudinit" {
   cloudinit_storage = each.value.cloudinit_storage
   username          = each.value.username
   password_length   = each.value.password_length
-  ssh_key_path      = each.value.ssh_key_path
+  ssh_key           = each.value.ssh_key
 }
 
 output "vm_passwords" {
