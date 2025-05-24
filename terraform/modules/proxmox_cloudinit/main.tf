@@ -24,7 +24,7 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
   ciuser     = var.username
   # cipassword = var.password
   cipassword = random_password.password.result
-  sshkeys    = file(var.ssh_key_path)
+  sshkeys    = var.ssh_key
 
   serial {
     id = 0
