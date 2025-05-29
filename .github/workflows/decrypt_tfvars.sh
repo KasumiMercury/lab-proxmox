@@ -19,9 +19,7 @@ find "$TARGET_DIR" -name "*.tfvars.json.gpg" -type f | while read -r encrypted_f
     
     echo "Decrypting: $encrypted_file -> $decrypted_file"
     
-    echo "$GPG_PASS" | gpg --batch --yes --quiet --decrypt --passphrase-fd 0 "$encrypted_file" > "$decrypted_file"
-    
-    if [ $? -eq 0 ]; then
+    if echo "$GPG_PASS" | gpg --batch --yes --quiet --decrypt --passphrase-fd 0 "$encrypted_file" > "$decrypted_file"; then
         echo "Successfully decrypted: $decrypted_file"
     else
         echo "Failed to decrypt: $encrypted_file" >&2
