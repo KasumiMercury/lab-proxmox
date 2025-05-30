@@ -35,18 +35,18 @@ provider "cloudflare" {
 module "proxmox_cloudinit" {
   source = "../../modules/proxmox_cloudinit"
 
-  vmid              = 300
-  vm_name           = "test-vm"
-  template          = "noble-template"
-  target_node       = "hod"
-  ip_address        = "192.168.110.111"
-  gateway           = "192.168.110.1"
-  network_bridge    = "vmbr100"
-  network_tag       = 0
-  cloudinit_storage = "strix0"
-  username          = "test"
-  password_length   = 16
-  ssh_key           = ""
+  vmid              = var.virtual_machine.vmid
+  vm_name           = var.virtual_machine.vm_name
+  template          = var.template
+  target_node       = var.virtual_machine.target_node
+  ip_address        = var.credentials_vm.ip_address
+  gateway           = var.credentials_vm.gateway
+  network_bridge    = var.virtual_machine.network_bridge
+  network_tag       = var.virtual_machine.network_tag
+  cloudinit_storage = var.cloudinit_storage
+  username          = var.credentials_vm.username
+  password_length   = var.credentials_vm.password_length
+  ssh_key           = var.credentials_vm.ssh_key
 }
 
 output "password" {
