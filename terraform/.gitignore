@@ -37,6 +37,3 @@ override.tf.json
 terraform.rc
 
 .env
-
-# Allow specific .tfvars files
-!k8s.auto.tfvars
