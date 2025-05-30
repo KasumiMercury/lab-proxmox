@@ -21,7 +21,7 @@ tasks:
   warning:
     prompt: "Are you sure?"
 
-  push-tfvars-json:
+  push-secret-tfvars-json:
     aliases:
       - push
     desc: "Encodes the content of all files ending with tfvars.json in the specified directory"
