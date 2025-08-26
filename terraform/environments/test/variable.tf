@@ -1,16 +1,24 @@
 variable "template" {
-  description = "Template to clone from"
+  description = "Proxmox VM template name to clone from (must exist on all target nodes)"
   type        = string
+  validation {
+    condition     = length(var.template) > 0
+    error_message = "Template name cannot be empty."
+  }
 }
 
 variable "cloudinit_storage" {
-  description = "Storage for cloud-init disk"
+  description = "Storage pool name for cloud-init disk (must be available on all target nodes)"
   type        = string
+  validation {
+    condition     = length(var.cloudinit_storage) > 0
+    error_message = "Cloud-init storage name cannot be empty."
+  }
 }
 
-variable "virtual_machine" {
-  description = "Configuration for the virtual machine"
-  type = object({
+variable "virtual_machines" {
+  description = "A map of virtual machines to create. Each key is a VM identifier, and the value is an object with VM specific configurations."
+  type = map(object({
     target_node    = string
     vmid           = number
     vm_name        = string
@@ -19,16 +27,17 @@ variable "virtual_machine" {
     network_bridge = optional(string, "vmbr0")
     network_tag    = optional(number, 0)
     disk_size      = optional(number, 32)
-  })
+  }))
 }
 
 variable "credentials_vm" {
-  description = "Credentials for the VM"
-  type = object({
-    ip_address     = string
-    gateway        = string
-    username       = string
+  description = "Credentials for each VM, keyed by the same identifiers as virtual_machines"
+  type = map(object({
+    ip_address      = string
+    gateway         = string
+    username        = string
     password_length = number
-    ssh_key        = string
-  })
+    ssh_key         = string
+  }))
 }
+

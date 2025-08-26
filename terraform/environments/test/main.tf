@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.11"
   backend "s3" {
     bucket                      = "terraform"
-    key                         = "proxmox/k8s/terraform.tfstate"
+    key                         = "proxmox/test/terraform.tfstate"
     region                      = "auto"
     skip_credentials_validation = true
     skip_metadata_api_check     = true
@@ -32,25 +32,49 @@ provider "cloudflare" {
   # token pulled from $CLOUDFLARE_API_TOKEN
 }
 
-module "proxmox_cloudinit" {
-  source = "../../modules/proxmox_cloudinit"
-
-  vmid              = var.virtual_machine.vmid
-  vm_name           = var.virtual_machine.vm_name
-  template          = var.template
-  target_node       = var.virtual_machine.target_node
-  ip_address        = var.credentials_vm.ip_address
-  gateway           = var.credentials_vm.gateway
-  network_bridge    = var.virtual_machine.network_bridge
-  network_tag       = var.virtual_machine.network_tag
-  cloudinit_storage = var.cloudinit_storage
-  username          = var.credentials_vm.username
-  password_length   = var.credentials_vm.password_length
-  ssh_key           = var.credentials_vm.ssh_key
+provider "proxmox" {
+  pm_tls_insecure = true
+  # Proxmox API credentials expected via environment variables:
+  # PM_API_URL, PM_USER, PM_PASS (or PM_API_TOKEN_ID and PM_API_TOKEN_SECRET)
 }
 
-output "password" {
-  value       = module.proxmox_cloudinit.password
-  description = "Generated password for the VM"
-  sensitive   = true
+locals {
+  vm_configurations = {
+    for vm_key, vm_instance in var.virtual_machines :
+    vm_key => merge(
+      vm_instance,
+      var.credentials_vm[vm_key],
+      {
+        cloudinit_storage = var.cloudinit_storage
+        template          = var.template
+      }
+    )
+  }
+}
+
+module "proxmox_cloudinit" {
+  for_each = local.vm_configurations
+  source   = "../../modules/proxmox_cloudinit"
+
+  vmid              = each.value.vmid
+  vm_name           = each.value.vm_name
+  template          = each.value.template
+  target_node       = each.value.target_node
+  ip_address        = each.value.ip_address
+  gateway           = each.value.gateway
+  network_bridge    = each.value.network_bridge
+  network_tag       = each.value.network_tag
+  cloudinit_storage = each.value.cloudinit_storage
+  username          = each.value.username
+  password_length   = each.value.password_length
+  ssh_key           = each.value.ssh_key
+}
+
+output "vm_passwords" {
+  description = "A map of VM names to their generated passwords."
+  value = {
+    for vm_key, vm_instance in module.proxmox_cloudinit :
+    vm_key => vm_instance.password
+  }
+  sensitive = true
 }

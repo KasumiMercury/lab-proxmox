@@ -4,8 +4,12 @@ variable "target_node" {
 }
 
 variable "vmid" {
-  description = "VM ID for the new VM"
+  description = "VM ID for the new VM (must be unique within the Proxmox cluster)"
   type        = number
+  validation {
+    condition     = var.vmid >= 100 && var.vmid <= 999999999
+    error_message = "VMID must be between 100 and 999999999."
+  }
 }
 
 variable "vm_name" {
@@ -34,13 +38,21 @@ variable "memory" {
   # Network configuration
 */
 variable "ip_address" {
-  description = "IP address of the VM"
+  description = "IP address of the VM (CIDR notation without mask, e.g., 192.168.1.10)"
   type        = string
+  validation {
+    condition     = can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$", var.ip_address))
+    error_message = "IP address must be a valid IPv4 address format (e.g., 192.168.1.10)."
+  }
 }
 
 variable "gateway" {
-  description = "Gateway for the VM"
+  description = "Gateway IP address for the VM network"
   type        = string
+  validation {
+    condition     = can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$", var.gateway))
+    error_message = "Gateway must be a valid IPv4 address format (e.g., 192.168.1.1)."
+  }
 }
 
 variable "network_bridge" {
@@ -75,8 +87,12 @@ variable "username" {
 }
 
 variable "password_length" {
-  description = "Length of the password"
+  description = "Length of the generated password (minimum 8 characters recommended)"
   type        = number
+  validation {
+    condition     = var.password_length >= 8 && var.password_length <= 128
+    error_message = "Password length must be between 8 and 128 characters."
+  }
 }
 
 variable "ssh_key" {
