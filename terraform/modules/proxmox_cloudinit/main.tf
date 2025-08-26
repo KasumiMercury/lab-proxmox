@@ -14,9 +14,8 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
   name        = var.vm_name
   target_node = var.target_node
 
-  agent = 1
+  agent = 0
 
-  cores  = var.cores
   memory = var.memory
 
   ipconfig0 = "ip=${var.ip_address}/24,gw=${var.gateway},ip6=dhcp"
@@ -26,8 +25,13 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
   cipassword = random_password.password.result
   sshkeys    = var.ssh_key
 
+  cpu {
+    cores  = var.cores
+  }
+
   serial {
     id = 0
+    type = "socket"
   }
 
   disks {
