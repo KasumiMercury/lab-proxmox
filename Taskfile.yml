@@ -6,6 +6,7 @@ includes:
 
 vars:
   TF_ENV: '{{.TF_ENV | default "test"}}'
+  ANSIBLE_USE_PASSWORDS: '{{.ANSIBLE_USE_PASSWORDS | default "true"}}'
 
 tasks:
   terraform:init:
@@ -83,7 +84,10 @@ tasks:
         
         # Get outputs from terraform
         VM_INFO=$(terraform output -json vm_connection_info)
-        PASSWORDS=$(terraform output -json vm_passwords)
+        # Only fetch sensitive outputs if explicitly requested
+        if [ "{{.ANSIBLE_USE_PASSWORDS}}" = "true" ]; then
+          PASSWORDS=$(terraform output -json vm_passwords)
+        fi
         CREDENTIALS=$(terraform output -json vm_credentials)
         
         # Create inventory directory
@@ -97,9 +101,12 @@ tasks:
           VM_NAME=$(echo "$VM_INFO" | jq -r ".\"$vm_key\".name")
           VM_IP=$(echo "$VM_INFO" | jq -r ".\"$vm_key\".ip_address")
           USERNAME=$(echo "$CREDENTIALS" | jq -r ".\"$vm_key\".username")
-          PASSWORD=$(echo "$PASSWORDS" | jq -r ".\"$vm_key\"")
-          
-          echo "$VM_NAME ansible_host=$VM_IP ansible_user=$USERNAME ansible_password=$PASSWORD ansible_become_password=$PASSWORD ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'" >> ../../../ansible/inventory/hosts.ini
+          if [ "{{.ANSIBLE_USE_PASSWORDS}}" = "true" ]; then
+            PASSWORD=$(echo "$PASSWORDS" | jq -r ".\"$vm_key\"")
+            echo "$VM_NAME ansible_host=$VM_IP ansible_user=$USERNAME ansible_password=$PASSWORD ansible_become_password=$PASSWORD ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'" >> ../../../ansible/inventory/hosts.ini
+          else
+            echo "$VM_NAME ansible_host=$VM_IP ansible_user=$USERNAME ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'" >> ../../../ansible/inventory/hosts.ini
+          fi
         done
         
         echo "Inventory file generated at ansible/inventory/hosts.ini"
@@ -113,7 +120,22 @@ tasks:
     cmds:
       - |
         echo "Running Ansible playbook for VM setup..."
-        ansible-playbook -i inventory/hosts.ini playbooks/setup-vm.yml
+        OPTS=""
+        # Remote user (optional)
+        if [ -n "${ANSIBLE_REMOTE_USER:-}" ]; then
+          OPTS="$OPTS -u $ANSIBLE_REMOTE_USER"
+        fi
+        # Private key (optional)
+        if [ -n "${ANSIBLE_PRIVATE_KEY_FILE:-}" ]; then
+          OPTS="$OPTS --private-key $ANSIBLE_PRIVATE_KEY_FILE"
+        fi
+        # Vault password file (optional)
+        if [ -n "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ]; then
+          OPTS="$OPTS --vault-password-file $ANSIBLE_VAULT_PASSWORD_FILE"
+        elif [ -f ../.vault_pass.txt ]; then
+          OPTS="$OPTS --vault-password-file ../.vault_pass.txt"
+        fi
+        ansible-playbook -i inventory/hosts.ini $OPTS playbooks/setup-vm.yml
     
   ansible:setup:
     desc: Generate inventory and run Ansible setup (complete workflow)
@@ -129,4 +151,104 @@ tasks:
     cmds:
       - |
         echo "Testing Ansible connection to VMs..."
-        ansible -i inventory/hosts.ini all -m ping
+        OPTS=""
+        if [ -n "${ANSIBLE_REMOTE_USER:-}" ]; then
+          OPTS="$OPTS -u $ANSIBLE_REMOTE_USER"
+        fi
+        if [ -n "${ANSIBLE_PRIVATE_KEY_FILE:-}" ]; then
+          OPTS="$OPTS --private-key $ANSIBLE_PRIVATE_KEY_FILE"
+        fi
+        if [ -n "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ]; then
+          OPTS="$OPTS --vault-password-file $ANSIBLE_VAULT_PASSWORD_FILE"
+        elif [ -f ../.vault_pass.txt ]; then
+          OPTS="$OPTS --vault-password-file ../.vault_pass.txt"
+        fi
+        ansible -i inventory/hosts.ini $OPTS all -m ping
+
+  proxmox:upload-snippet:
+    desc: "Copy a snippet (default: password-auth.yml) to Proxmox snippets on target host"
+    vars:
+      HOST: '{{.HOST | default ""}}'
+      SRC: '{{.SRC | default "password-auth.yml"}}'
+      DEST: '{{.DEST | default "/var/lib/vz/snippets/password-auth.yml"}}'
+    cmds:
+      - |
+        if [ -z "{{.HOST}}" ]; then
+          echo "Usage: task proxmox:upload-snippet HOST=user@host [SRC=password-auth.yml] [DEST=/var/lib/vz/snippets/password-auth.yml]" >&2
+          exit 1
+        fi
+        if [ ! -f "{{.SRC}}" ]; then
+          echo "Source file not found: {{.SRC}}" >&2
+          exit 1
+        fi
+        DIR=$(dirname "{{.DEST}}")
+        BASENAME=$(basename "{{.DEST}}")
+        TMP=/tmp/$BASENAME
+        echo "Creating snippets dir on {{.HOST}}: $DIR"
+        ssh {{.HOST}} "sudo mkdir -p $DIR"
+        echo "Copying {{.SRC}} to {{.HOST}}:$TMP (then sudo mv to {{.DEST}})"
+        scp "{{.SRC}}" "{{.HOST}}:$TMP"
+        ssh {{.HOST}} "sudo mv $TMP {{.DEST}} && sudo chmod 0644 {{.DEST}}"
+        echo "Done. In tfvars, set: cicustom = \"user=<storage_id>:snippets/$(basename {{.DEST}})\""
+
+  ansible:vault-passfile:
+    desc: Create local .vault_pass.txt (gitignored)
+    cmds:
+      - |
+        if [ -f .vault_pass.txt ]; then
+          echo ".vault_pass.txt already exists (nothing to do)."
+          exit 0
+        fi
+        echo "This creates .vault_pass.txt locally (gitignored)."
+        echo "It will be used by ansible-vault and ansible.cfg."
+        printf "Enter Vault password: " >&2; stty -echo; IFS= read -r P; stty echo; echo
+        printf "Confirm Vault password: " >&2; stty -echo; IFS= read -r C; stty echo; echo
+        if [ "$P" != "$C" ]; then
+          echo "Passwords do not match." >&2
+          exit 1
+        fi
+        umask 077
+        printf "%s\n" "$P" > .vault_pass.txt
+        echo ".vault_pass.txt created with 0600 permissions."
+
+  ansible:vault-hostvars-generate:
+    desc: Generate per-host encrypted host_vars with ansible-vault from Terraform outputs
+    vars:
+      TF_ENV: '{{.TF_ENV | default "test"}}'
+    dir: terraform/environments/{{.TF_ENV}}
+    cmds:
+      - |
+        if [ ! -f ../../../.vault_pass.txt ]; then
+          echo "Vault password file not found: ../../../.vault_pass.txt" >&2
+          echo "Run: task ansible:vault-passfile" >&2
+          exit 1
+        fi
+        echo "Generating encrypted host_vars from Terraform outputs for {{.TF_ENV}}..."
+        VM_INFO=$(terraform output -json vm_connection_info)
+        PASSWORDS=$(terraform output -json vm_passwords)
+        CREDENTIALS=$(terraform output -json vm_credentials)
+        mkdir -p ../../../ansible/host_vars
+        echo "$VM_INFO" | jq -r 'keys[]' | while read vm_key; do
+          VM_NAME=$(echo "$VM_INFO" | jq -r ".\"$vm_key\".name")
+          PASSWORD=$(echo "$PASSWORDS" | jq -r ".\"$vm_key\"")
+          HV_DIR=../../../ansible/host_vars/$VM_NAME
+          HV_FILE=$HV_DIR/vault.yml
+          mkdir -p "$HV_DIR"
+          printf '%s\n' \
+            "ansible_password: \"$PASSWORD\"" \
+            "ansible_become_password: \"$PASSWORD\"" \
+            > "$HV_FILE"
+          # Encrypt with ansible-vault using local password file
+          (cd ../../../ansible && ansible-vault encrypt --vault-password-file ../.vault_pass.txt "host_vars/$VM_NAME/vault.yml")
+          echo "Encrypted: ansible/host_vars/$VM_NAME/vault.yml"
+        done
+        echo "Done. Generate inventory without passwords next:"
+        echo "ANSIBLE_USE_PASSWORDS=false task ansible:generate-inventory TF_ENV={{.TF_ENV}}"
+
+  ansible:generate-inventory-vault:
+    desc: Generate inventory without passwords (for Vault-managed host_vars)
+    vars:
+      TF_ENV: '{{.TF_ENV | default "test"}}'
+    cmds:
+      - |
+        ANSIBLE_USE_PASSWORDS=false task ansible:generate-inventory TF_ENV={{.TF_ENV}}
