@@ -1,0 +1,10 @@
+#cloud-config
+users:
+  - name: REPLACE_WITH_USER
+    sudo: ALL=(ALL) NOPASSWD:ALL
+ssh_pwauth: false
+
+# Notes:
+# - Upload this to your Proxmox snippets storage (e.g., local:snippets/ansible-user.yml).
+# - In Terraform env tfvars, set: cicustom = "user=local:snippets/ansible-user.yml"
+# - This disables SSH password auth and enables passwordless sudo for the user.
