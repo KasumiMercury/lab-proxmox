@@ -3,3 +3,130 @@ version: '3'
 includes:
   tf:
     taskfile: "terraform/Taskfile.yml"
+
+vars:
+  TF_ENV: '{{.TF_ENV | default "test"}}'
+
+tasks:
+  terraform:init:
+    desc: Initialize Terraform for specified environment
+    dir: terraform/environments/{{.TF_ENV}}
+    cmds:
+      - |
+        echo "Initializing Terraform for {{.TF_ENV}} environment..."
+        terraform init
+
+  terraform:plan:
+    desc: Plan Terraform changes for specified environment
+    dir: terraform/environments/{{.TF_ENV}}
+    deps:
+      - terraform:init
+    cmds:
+      - |
+        echo "Planning Terraform changes for {{.TF_ENV}} environment..."
+        terraform plan
+
+  terraform:apply:
+    desc: Apply Terraform changes for specified environment
+    dir: terraform/environments/{{.TF_ENV}}
+    deps:
+      - terraform:init
+    cmds:
+      - |
+        echo "Applying Terraform changes for {{.TF_ENV}} environment..."
+        terraform apply
+
+  terraform:destroy:
+    desc: Destroy Terraform resources for specified environment
+    dir: terraform/environments/{{.TF_ENV}}
+    cmds:
+      - |
+        echo "Destroying Terraform resources for {{.TF_ENV}} environment..."
+        terraform destroy
+
+  terraform:output:
+    desc: Show Terraform outputs for specified environment
+    dir: terraform/environments/{{.TF_ENV}}
+    cmds:
+      - |
+        echo "Terraform outputs for {{.TF_ENV}} environment:"
+        terraform output
+
+  terraform:output-passwords:
+    desc: Show VM passwords (sensitive output)
+    dir: terraform/environments/{{.TF_ENV}}
+    cmds:
+      - |
+        echo "VM passwords for {{.TF_ENV}} environment:"
+        terraform output vm_passwords
+
+  deploy:
+    desc: Complete deployment workflow (Terraform apply + Ansible setup)
+    cmds:
+      - task: terraform:apply
+      - |
+        echo "Waiting for VM to be ready..."
+        sleep 30
+      - task: ansible:setup
+
+  destroy-all:
+    desc: Complete cleanup workflow (Terraform destroy)
+    cmds:
+      - task: terraform:destroy
+
+  ansible:generate-inventory:
+    desc: Generate Ansible inventory from Terraform outputs
+    dir: terraform/environments/{{.TF_ENV}}
+    cmds:
+      - |
+        echo "Generating Ansible inventory for {{.TF_ENV}} environment..."
+        
+        # Get outputs from terraform
+        VM_INFO=$(terraform output -json vm_connection_info)
+        PASSWORDS=$(terraform output -json vm_passwords)
+        CREDENTIALS=$(terraform output -json vm_credentials)
+        
+        # Create inventory directory
+        mkdir -p ../../../ansible/inventory
+        
+        # Generate hosts.ini file
+        echo "[vms]" > ../../../ansible/inventory/hosts.ini
+        
+        # Extract info for each VM and add to inventory
+        echo "$VM_INFO" | jq -r 'keys[]' | while read vm_key; do
+          VM_NAME=$(echo "$VM_INFO" | jq -r ".\"$vm_key\".name")
+          VM_IP=$(echo "$VM_INFO" | jq -r ".\"$vm_key\".ip_address")
+          USERNAME=$(echo "$CREDENTIALS" | jq -r ".\"$vm_key\".username")
+          PASSWORD=$(echo "$PASSWORDS" | jq -r ".\"$vm_key\"")
+          
+          echo "$VM_NAME ansible_host=$VM_IP ansible_user=$USERNAME ansible_password=$PASSWORD ansible_become_password=$PASSWORD ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'" >> ../../../ansible/inventory/hosts.ini
+        done
+        
+        echo "Inventory file generated at ansible/inventory/hosts.ini"
+        cat ../../../ansible/inventory/hosts.ini
+
+  ansible:run:
+    desc: Run Ansible playbook for VM setup
+    dir: ansible
+    deps:
+      - ansible:generate-inventory
+    cmds:
+      - |
+        echo "Running Ansible playbook for VM setup..."
+        ansible-playbook -i inventory/hosts.ini playbooks/setup-vm.yml
+    
+  ansible:setup:
+    desc: Generate inventory and run Ansible setup (complete workflow)
+    cmds:
+      - task: ansible:generate-inventory
+      - task: ansible:run
+
+  ansible:test-connection:
+    desc: Test Ansible connection to VMs
+    dir: ansible
+    deps:
+      - ansible:generate-inventory
+    cmds:
+      - |
+        echo "Testing Ansible connection to VMs..."
+        ansible -i inventory/hosts.ini all -m ping
