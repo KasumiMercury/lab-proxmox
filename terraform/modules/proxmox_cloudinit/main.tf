@@ -20,6 +20,8 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
 
   ipconfig0 = "ip=${var.ip_address}/24,gw=${var.gateway},ip6=dhcp"
 
+  nameserver = "8.8.8.8"
+
   ciuser     = var.username
   # cipassword = var.password
   cipassword = random_password.password.result

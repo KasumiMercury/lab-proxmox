@@ -78,3 +78,28 @@ output "vm_passwords" {
   }
   sensitive = true
 }
+
+output "vm_connection_info" {
+  description = "Connection information for each VM"
+  value = {
+    for vm_key, vm_instance in module.proxmox_cloudinit :
+    vm_key => {
+      name           = vm_instance.vm_name
+      ip_address     = vm_instance.vm_ip
+      ssh_connection = vm_instance.ssh_connection
+    }
+  }
+  sensitive = true
+}
+
+output "vm_credentials" {
+  description = "VM credentials for Ansible inventory generation"
+  value = {
+    for vm_key, credentials in var.credentials_vm :
+    vm_key => {
+      username   = credentials.username
+      ip_address = credentials.ip_address
+    }
+  }
+  sensitive = true
+}
