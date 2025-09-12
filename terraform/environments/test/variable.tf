@@ -41,3 +41,10 @@ variable "credentials_vm" {
   }))
 }
 
+# Optional: attach a common cloud-init snippet to all VMs
+# Example value: "user=local:snippets/ansible-user.yml"
+variable "cicustom" {
+  description = "Cloud-init custom snippet reference for all VMs (optional)"
+  type        = string
+  default     = null
+}
