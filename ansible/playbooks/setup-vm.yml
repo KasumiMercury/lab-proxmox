@@ -1,0 +1,98 @@
+---
+- name: Setup VM with Japanese environment and tools
+  hosts: all
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Wait for cloud-init to complete
+      wait_for:
+        path: /var/lib/cloud/instance/boot-finished
+        timeout: 300
+      tags: [wait]
+
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: [packages]
+
+    - name: Install required packages for locale and keyboard
+      apt:
+        name:
+          - locales
+          - keyboard-configuration
+          - console-setup
+          - bashtop
+        state: present
+      tags: [packages]
+
+    - name: Generate ja_JP.UTF-8 locale
+      locale_gen:
+        name: ja_JP.UTF-8
+        state: present
+      tags: [locale]
+
+    - name: Set system timezone to Asia/Tokyo
+      timezone:
+        name: Asia/Tokyo
+      notify: restart systemd-timesyncd
+      tags: [timezone]
+
+    - name: Configure keyboard layout to Japanese
+      debconf:
+        name: keyboard-configuration
+        question: "{{ item.question }}"
+        value: "{{ item.value }}"
+        vtype: "{{ item.vtype }}"
+      loop:
+        - { question: "keyboard-configuration/layout", value: "Japanese", vtype: "string" }
+        - { question: "keyboard-configuration/variant", value: "Japanese", vtype: "string" }
+        - { question: "keyboard-configuration/model", value: "Generic 105-key PC", vtype: "string" }
+      tags: [keyboard]
+      notify: reconfigure keyboard
+
+    - name: Update keyboard configuration files
+      lineinfile:
+        path: /etc/default/keyboard
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backup: yes
+      loop:
+        - { regexp: '^XKBLAYOUT=', line: 'XKBLAYOUT="jp"' }
+        - { regexp: '^XKBVARIANT=', line: 'XKBVARIANT=""' }
+        - { regexp: '^XKBMODEL=', line: 'XKBMODEL="pc105"' }
+      tags: [keyboard]
+      notify: reconfigure keyboard
+
+    - name: Verify bashtop installation
+      command: which bashtop
+      register: bashtop_check
+      changed_when: false
+      failed_when: false
+      tags: [verify]
+
+    - name: Display setup completion status
+      debug:
+        msg: |
+          Setup completed successfully:
+          - Timezone: Asia/Tokyo
+          - Locale: ja_JP.UTF-8 generated
+          - Keyboard: Japanese layout configured
+          - Bashtop: {{ 'Installed' if bashtop_check.rc == 0 else 'Installation failed' }}
+      tags: [verify]
+
+  handlers:
+    - name: restart systemd-timesyncd
+      systemd:
+        name: systemd-timesyncd
+        state: restarted
+
+    - name: reconfigure keyboard
+      command: dpkg-reconfigure -f noninteractive keyboard-configuration
+      notify: restart console-setup
+
+    - name: restart console-setup
+      systemd:
+        name: console-setup
+        state: restarted
