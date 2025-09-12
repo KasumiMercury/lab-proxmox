@@ -114,3 +114,14 @@ variable "template" {
   description = "Template to clone from"
   type        = string
 }
+
+/*
+  # Optional: Cloud-init custom snippet
+  # Example: "user=local:snippets/ansible-user.yml"
+  # Use this to enforce passwordless sudo and disable SSH password auth.
+*/
+variable "cicustom" {
+  description = "Cloud-init custom snippet reference (e.g., user=local:snippets/ansible-user.yml)"
+  type        = string
+  default     = null
+}

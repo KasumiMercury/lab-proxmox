@@ -61,4 +61,9 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
     model    = "virtio"
     firewall = true
   }
+
+  # Optional: attach cloud-init custom user-data snippet
+  # e.g., var.cicustom = "user=local:snippets/ansible-user.yml"
+  # This can configure NOPASSWD sudo and disable SSH password auth.
+  cicustom = var.cicustom
 }
