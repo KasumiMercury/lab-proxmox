@@ -1,1 +1,14 @@
+# Terraform local state and caches
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+
+# Ansible generated inventory and cache
+ansible/inventory/hosts.ini
+ansible/inventory/*.ini
+.ansible/
+
+# Env files (local only)
 .env
