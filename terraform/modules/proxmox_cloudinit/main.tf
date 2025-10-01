@@ -5,10 +5,10 @@ resource "random_password" "password" {
 
 resource "proxmox_vm_qemu" "basic_cloudinit" {
   os_type    = "cloud-init"
-  clone     = var.template
-  boot = "order=scsi0"
+  clone      = var.template
+  boot       = "order=scsi0"
   full_clone = false
-  scsihw = "virtio-scsi-single"
+  scsihw     = "virtio-scsi-single"
 
   vmid        = var.vmid
   name        = var.vm_name
@@ -22,17 +22,17 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
 
   nameserver = "8.8.8.8"
 
-  ciuser     = var.username
+  ciuser = var.username
   # cipassword = var.password
   cipassword = random_password.password.result
   sshkeys    = var.ssh_key
 
   cpu {
-    cores  = var.cores
+    cores = var.cores
   }
 
   serial {
-    id = 0
+    id   = 0
     type = "socket"
   }
 
