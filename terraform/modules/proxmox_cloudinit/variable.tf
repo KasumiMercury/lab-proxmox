@@ -83,7 +83,7 @@ variable "disk_size" {
 variable "username" {
   description = "Username"
   type        = string
-  sensitive = true
+  sensitive   = true
 }
 
 variable "password_length" {
