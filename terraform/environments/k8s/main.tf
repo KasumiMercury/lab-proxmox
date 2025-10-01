@@ -53,7 +53,6 @@ locals {
 }
 
 module "proxmox_cloudinit" {
-  # for_each = var.virtual_machines
   for_each = local.vm_configurations
   source   = "../../modules/proxmox_cloudinit"
 
@@ -71,7 +70,7 @@ module "proxmox_cloudinit" {
   ssh_key           = each.value.ssh_key
 
   # Optional: attach cloud-init snippet to configure sudo/SSH hardening
-  cicustom          = var.cicustom
+  cicustom = var.cicustom
 }
 
 output "vm_passwords" {
@@ -79,6 +78,31 @@ output "vm_passwords" {
   value = {
     for vm_key, vm_instance in module.proxmox_cloudinit :
     vm_key => vm_instance.password
+  }
+  sensitive = true
+}
+
+output "vm_connection_info" {
+  description = "Connection information for each VM"
+  value = {
+    for vm_key, vm_instance in module.proxmox_cloudinit :
+    vm_key => {
+      name           = vm_instance.vm_name
+      ip_address     = vm_instance.vm_ip
+      ssh_connection = vm_instance.ssh_connection
+    }
+  }
+  sensitive = true
+}
+
+output "vm_credentials" {
+  description = "VM credentials for Ansible inventory generation"
+  value = {
+    for vm_key, credentials in var.credentials_vm :
+    vm_key => {
+      username   = credentials.username
+      ip_address = credentials.ip_address
+    }
   }
   sensitive = true
 }
