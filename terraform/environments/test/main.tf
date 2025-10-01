@@ -70,7 +70,7 @@ module "proxmox_cloudinit" {
   ssh_key           = each.value.ssh_key
 
   # Optional: attach cloud-init snippet to configure sudo/SSH hardening
-  cicustom          = var.cicustom
+  cicustom = var.cicustom
 }
 
 output "vm_passwords" {
