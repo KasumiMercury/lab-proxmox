@@ -1,5 +1,5 @@
 ---
-- name: Setup VM with Japanese environment and tools
+- name: Setup k8s VM baseline configuration
   hosts: all
   become: true
   gather_facts: true
