@@ -11,12 +11,17 @@
 - `ANSIBLE_PRIVATE_KEY_FILE`, `ANSIBLE_VAULT_PASSWORD_FILE`, `ANSIBLE_REMOTE_USER`: override defaults when running Ansible tasks
 
 ## Workflow
-1. `task terraform:plan TF_ENV=test`
-2. `task terraform:apply TF_ENV=test`
-3. `task ansible:generate-inventory TF_ENV=test`
-4. `task ansible:test-connection TF_ENV=test`
-5. `task ansible:run TF_ENV=test`
-6. `task terraform:destroy TF_ENV=test`
+1. `task tf:decrypt -- terraform/environments/test` (first time / after a pull that changed `*.gpg`)
+2. `task tf:plan TF_ENV=test`
+3. `task tf:apply TF_ENV=test`
+4. `task ans:inventory TF_ENV=test`
+5. `task ans:ping TF_ENV=test`
+6. `task ans:run TF_ENV=test`
+7. `task tf:destroy TF_ENV=test`
+
+`task deploy TF_ENV=test` runs steps 3, 4 and 6 in one go. Every Terraform-backed task depends on `tf:init`, which runs once per invocation.
+
+Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:destroy` `tf:output` `tf:passwords` `tf:encrypt` `tf:decrypt` `ans:inventory` `ans:ping` `ans:run` `ans:setup` `ans:vault-hostvars` `pve:snippet`
 
 ## Terraform Layout
 - `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
