@@ -9,7 +9,6 @@
 *.tfvars.json
 
 # Ansible generated inventory and cache
-ansible/inventory/hosts.ini
 ansible/inventory/*.ini
 .ansible/
 
