@@ -12,9 +12,7 @@ tasks:
       ENCODED: "{{ b64enc .DATA }}"
       SECRET_NAME: "{{.FILE_NAME | replace \".tfvars.json\" \"\" | replace \".auto\" \"\" | replace \" \" \"_\" | replace \"-\" \"_\" | replace \".\" \"_\" | upper}}"
     cmds:
-      - echo "{{ .DATA }}"
       - echo "{{ .SECRET_NAME }}"
-      - echo "{{ .ENCODED }}"
       - task: warning
       - gh secret set {{ .SECRET_NAME }} --body {{ .ENCODED }}
 
