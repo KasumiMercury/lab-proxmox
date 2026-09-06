@@ -5,6 +5,9 @@
 *.tfstate.backup
 *.tfplan
 
+# Decrypted secrets (commit only *.tfvars.json.gpg)
+*.tfvars.json
+
 # Ansible generated inventory and cache
 ansible/inventory/hosts.ini
 ansible/inventory/*.ini
