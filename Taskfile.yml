@@ -15,7 +15,9 @@ vars:
 tasks:
   terraform:init:
     desc: Initialize Terraform for specified environment
+    aliases: [tf:init]
     dir: terraform/environments/{{.TF_ENV}}
+    run: once
     cmds:
       - |
         echo "Initializing Terraform for {{.TF_ENV}} environment..."
@@ -23,6 +25,7 @@ tasks:
 
   terraform:plan:
     desc: Plan Terraform changes for specified environment
+    aliases: [tf:plan]
     dir: terraform/environments/{{.TF_ENV}}
     deps:
       - terraform:init
@@ -33,6 +36,7 @@ tasks:
 
   terraform:apply:
     desc: Apply Terraform changes for specified environment
+    aliases: [tf:apply]
     dir: terraform/environments/{{.TF_ENV}}
     deps:
       - terraform:init
@@ -43,7 +47,10 @@ tasks:
 
   terraform:destroy:
     desc: Destroy Terraform resources for specified environment
+    aliases: [tf:destroy]
     dir: terraform/environments/{{.TF_ENV}}
+    deps:
+      - terraform:init
     cmds:
       - |
         echo "Destroying Terraform resources for {{.TF_ENV}} environment..."
@@ -51,7 +58,10 @@ tasks:
 
   terraform:output:
     desc: Show Terraform outputs for specified environment
+    aliases: [tf:output]
     dir: terraform/environments/{{.TF_ENV}}
+    deps:
+      - terraform:init
     cmds:
       - |
         echo "Terraform outputs for {{.TF_ENV}} environment:"
@@ -59,7 +69,10 @@ tasks:
 
   terraform:output-passwords:
     desc: Show VM passwords (sensitive output)
+    aliases: [tf:passwords]
     dir: terraform/environments/{{.TF_ENV}}
+    deps:
+      - terraform:init
     cmds:
       - |
         echo "VM passwords for {{.TF_ENV}} environment:"
@@ -78,7 +91,10 @@ tasks:
 
   ansible:generate-inventory:
     desc: Generate Ansible inventory from Terraform outputs
+    aliases: [ans:inventory]
     dir: terraform/environments/{{.TF_ENV}}
+    deps:
+      - terraform:init
     cmds:
       - |
         echo "Generating Ansible inventory for {{.TF_ENV}} environment..."
@@ -121,6 +137,7 @@ tasks:
 
   ansible:run:
     desc: Run Ansible playbook for VM setup
+    aliases: [ans:run]
     dir: ansible
     deps:
       - ansible:generate-inventory
@@ -148,12 +165,14 @@ tasks:
     
   ansible:setup:
     desc: Generate inventory and run Ansible setup (complete workflow)
+    aliases: [ans:setup]
     cmds:
       - task: ansible:generate-inventory
       - task: ansible:run
 
   ansible:test-connection:
     desc: Test Ansible connection to VMs
+    aliases: [ans:ping]
     dir: ansible
     deps:
       - ansible:generate-inventory
@@ -177,6 +196,7 @@ tasks:
 
   proxmox:upload-snippet:
     desc: "Copy a cloud-init snippet (default: ansible/cloudinit-snippets/password-auth.yml) to Proxmox snippets on target host"
+    aliases: [pve:snippet]
     vars:
       HOST: '{{.HOST | default ""}}'
       SRC: '{{.SRC | default "ansible/cloudinit-snippets/password-auth.yml"}}'
@@ -223,9 +243,12 @@ tasks:
 
   ansible:vault-hostvars-generate:
     desc: Generate per-host encrypted host_vars with ansible-vault from Terraform outputs
+    aliases: [ans:vault-hostvars]
     vars:
       TF_ENV: '{{.TF_ENV | default "test"}}'
     dir: terraform/environments/{{.TF_ENV}}
+    deps:
+      - terraform:init
     cmds:
       - |
         if [ ! -f ../../../.vault_pass.txt ]; then
