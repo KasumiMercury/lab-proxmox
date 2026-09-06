@@ -23,6 +23,7 @@ variable "virtual_machines" {
     vmid           = number
     vm_name        = string
     cores          = optional(number, 2)
+    cpu_type       = optional(string, "x86-64-v2-AES")
     memory         = optional(number, 4096)
     network_bridge = optional(string, "vmbr0")
     network_tag    = optional(number, 0)

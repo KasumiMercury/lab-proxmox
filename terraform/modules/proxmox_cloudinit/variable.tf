@@ -28,6 +28,12 @@ variable "cores" {
   default     = 2
 }
 
+variable "cpu_type" {
+  description = "Proxmox CPU type (e.g. x86-64-v2-AES for live migration compatibility, host for full CPU features)"
+  type        = string
+  default     = "x86-64-v2-AES"
+}
+
 variable "memory" {
   description = "Amount of memory in MB"
   type        = number

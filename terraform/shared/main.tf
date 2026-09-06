@@ -21,6 +21,7 @@ module "proxmox_cloudinit" {
   template          = each.value.template
   target_node       = each.value.target_node
   cores             = each.value.cores
+  cpu_type          = each.value.cpu_type
   memory            = each.value.memory
   disk_size         = each.value.disk_size
   disk_storage      = each.value.disk_storage
