@@ -11,6 +11,8 @@ vars:
   ANSIBLE_PLAYBOOK:
     sh: 'if [ -f "ansible/playbooks/setup-{{.TF_ENV}}.yml" ]; then echo "playbooks/setup-{{.TF_ENV}}.yml"; else echo "playbooks/setup.yml"; fi'
   ANSIBLE_INVENTORY_FILE: 'inventory/{{.TF_ENV}}.ini'
+  # ssh-agent socket shared by all tasks when the caller has no agent of its own
+  SSH_AGENT_SOCK: '{{.SSH_AGENT_SOCK | default "$HOME/.ssh/lab-proxmox-agent.sock"}}'
 
 tasks:
   terraform:init:
@@ -89,6 +91,58 @@ tasks:
     cmds:
       - task: terraform:destroy
 
+  ssh:agent:
+    desc: Load the VM SSH key into an ssh-agent (starts one on a fixed socket if the shell has none)
+    aliases: [ssh:key]
+    run: once
+    silent: true
+    cmds:
+      - |
+        if [ "{{.ANSIBLE_USE_PASSWORDS}}" = "true" ]; then
+          echo "ANSIBLE_USE_PASSWORDS=true: skipping ssh-agent setup"
+          exit 0
+        fi
+        KEY="${SSH_KEY_FILE:-${ANSIBLE_PRIVATE_KEY_FILE:-$HOME/.ssh/id_ed25519}}"
+        case "$KEY" in "~"*) KEY="$HOME${KEY#\~}";; esac
+        if [ ! -f "$KEY" ]; then
+          echo "SSH private key not found: $KEY" >&2
+          echo "Set SSH_KEY_FILE (or ANSIBLE_PRIVATE_KEY_FILE) to the key registered in credentials_vm.ssh_key" >&2
+          exit 1
+        fi
+        # Reuse the caller's agent when available, otherwise use the fixed socket
+        export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
+        rc=0; ssh-add -l >/dev/null 2>&1 || rc=$?   # 2 = no agent reachable on the socket
+        if [ $rc -eq 2 ]; then
+          rm -f "$SSH_AUTH_SOCK"
+          ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+          echo "Started ssh-agent: $SSH_AUTH_SOCK"
+        fi
+        # Public key is needed to check whether the key is already loaded; derive it once if missing
+        if [ ! -f "$KEY.pub" ]; then
+          echo "Deriving $KEY.pub (passphrase may be requested)"
+          ssh-keygen -y -f "$KEY" > "$KEY.pub"
+        fi
+        FP=$(ssh-keygen -lf "$KEY.pub" | awk '{print $2}')
+        if ssh-add -l 2>/dev/null | grep -qF "$FP"; then
+          echo "SSH key already loaded in agent: $KEY"
+        else
+          echo "Loading SSH key into agent: $KEY"
+          ssh-add "$KEY"
+        fi
+
+  ssh:agent-stop:
+    desc: Stop the ssh-agent started by ssh:agent (the fixed-socket one only)
+    silent: true
+    cmds:
+      - |
+        SOCK="{{.SSH_AGENT_SOCK}}"
+        if pkill -f "ssh-agent -a $SOCK" 2>/dev/null; then
+          echo "Stopped ssh-agent: $SOCK"
+        else
+          echo "No ssh-agent running on $SOCK"
+        fi
+        rm -f "$SOCK"
+
   ansible:generate-inventory:
     desc: Generate Ansible inventory from Terraform outputs
     aliases: [ans:inventory]
@@ -141,8 +195,10 @@ tasks:
     dir: ansible
     deps:
       - ansible:generate-inventory
+      - ssh:agent
     cmds:
       - |
+        export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
         echo "Running Ansible playbook for {{.TF_ENV}} environment..."
         OPTS=""
         # Remote user (optional)
@@ -176,8 +232,10 @@ tasks:
     dir: ansible
     deps:
       - ansible:generate-inventory
+      - ssh:agent
     cmds:
       - |
+        export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
         echo "Testing Ansible connection for {{.TF_ENV}} environment..."
         OPTS=""
         if [ -n "${ANSIBLE_REMOTE_USER:-}" ]; then
