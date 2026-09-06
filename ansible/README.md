@@ -14,7 +14,8 @@
 
 ## Vault
 - Create `.vault_pass.txt`: `task ansible:vault-passfile`
-- Generate per-host vault vars: `task ansible:vault-hostvars-generate TF_ENV=<env>`
+- Generate per-host vault vars: `task ansible:vault-hostvars-generate TF_ENV=<env>` → `inventory/host_vars/<vm>/vault.yml` (loaded automatically next to the inventory)
+- `.vault_pass.txt` is passed via `--vault-password-file` by the Task targets (not configured in `ansible.cfg`)
 - Inventory without passwords: `ANSIBLE_USE_PASSWORDS=false task ansible:generate-inventory TF_ENV=<env>`
 
 ## Other
