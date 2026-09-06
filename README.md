@@ -21,7 +21,12 @@
 
 `task deploy TF_ENV=test` runs steps 3, 4 and 6 in one go. Every Terraform-backed task depends on `tf:init`, which runs once per invocation.
 
-Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:destroy` `tf:output` `tf:passwords` `tf:encrypt` `tf:decrypt` `ans:inventory` `ans:ping` `ans:run` `ans:setup` `ans:vault-hostvars` `pve:snippet`
+Ansible tasks (`ans:ping`, `ans:run`, `ans:setup`, `deploy`) also depend on `ssh:agent`, which makes sure the VM SSH key is loaded in an ssh-agent:
+- If the shell already has an agent (`SSH_AUTH_SOCK`), the key is added there. Otherwise an agent is started on a fixed socket (`~/.ssh/lab-proxmox-agent.sock`) that all tasks share, so the passphrase is asked once per boot, not per task
+- Key path: `SSH_KEY_FILE` (default `~/.ssh/id_ed25519`; `ANSIBLE_PRIVATE_KEY_FILE` is honored as well). Put the matching `.pub` next to it, or the task derives it once
+- `task ssh:agent-stop` stops the fixed-socket agent. Skipped automatically when `ANSIBLE_USE_PASSWORDS=true`
+
+Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:destroy` `tf:output` `tf:passwords` `tf:encrypt` `tf:decrypt` `ans:inventory` `ans:ping` `ans:run` `ans:setup` `ans:vault-hostvars` `ssh:key` `pve:snippet`
 
 ## Terraform Layout
 - `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
@@ -33,7 +38,7 @@ Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:dest
 ## Settings
 - `TF_ENV`: environment name (`test`, `k8s`). Default `test`
 - `ANSIBLE_USE_PASSWORDS`: write passwords into inventory (default `false`)
-- `ANSIBLE_PRIVATE_KEY_FILE`: path to SSH key, e.g. `~/.ssh/id_ed25519`
+- `SSH_KEY_FILE` / `ANSIBLE_PRIVATE_KEY_FILE`: SSH private key loaded by `ssh:agent`, e.g. `~/.ssh/id_ed25519`
 - `ANSIBLE_VAULT_PASSWORD_FILE`: path to vault password file, e.g. `.vault_pass.txt`
 - Inventory output: `ansible/inventory/<env>.ini`
 - Playbook: `ansible/playbooks/setup.yml`. If `ansible/playbooks/setup-<env>.yml` exists it is used instead (override with `ANSIBLE_PLAYBOOK=...`)
