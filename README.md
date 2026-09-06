@@ -19,6 +19,13 @@
 5. `task ansible:run TF_ENV=test`
 6. `task terraform:destroy TF_ENV=test`
 
+## Terraform Layout
+- `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
+- `terraform/environments/<env>/`: symlinks to `shared/*.tf` plus `<env>.auto.tfvars`, `<env>_credential.auto.tfvars.json(.gpg)`, `.terraform.lock.hcl`
+- State key is set at init: `terraform init -backend-config="key=proxmox/<env>/terraform.tfstate"` (`task terraform:init` does this)
+- Backend is Cloudflare R2 (S3-compatible); endpoint and credentials come from `AWS_*` env vars
+- To add an environment: create the directory, symlink the four `shared/*.tf` files, add tfvars. On Windows enable `git config core.symlinks true` before checkout
+
 ## Settings
 - `TF_ENV`: environment name (`test`, `k8s`). Default `test`
 - `ANSIBLE_USE_PASSWORDS`: write passwords into inventory (default `false`)
@@ -33,7 +40,7 @@
 
 
 ## SSH
-- `ANSILE_SSH_ARGS`: disable host key checking
+- `ANSIBLE_SSH_ARGS`: disable host key checking
   ```bash
   export ANSIBLE_SSH_ARGS='-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
   ```
@@ -44,5 +51,5 @@
 - Decrypt: `task -d terraform decrypt -- terraform/environments/<env>` → `*.tfvars.json` (0600, overwrites existing)
 - Single file: `task -d terraform gpg-decrypt-file -- terraform/environments/k8s/k8s_credential.auto.tfvars.json.gpg`
 - `task ansible:vault-passfile` → `.vault_pass.txt` (gitignored)
-- `task ansible:vault-hostvars-generate TF_ENV=test` → encrypted `ansible/host_vars/<vm>/vault.yml`
+- `task ansible:vault-hostvars-generate TF_ENV=test` → encrypted `ansible/inventory/host_vars/<vm>/vault.yml`
 - No-password inventory: `ANSIBLE_USE_PASSWORDS=false task ansible:generate-inventory TF_ENV=test`
