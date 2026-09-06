@@ -9,6 +9,7 @@ virtual_machines = {
     vmid           = 910
     vm_name        = "test-vm"
     cores          = 2
+    cpu_type       = "host"
     memory         = 4096
     network_bridge = "vmbr100"
     network_tag    = 0

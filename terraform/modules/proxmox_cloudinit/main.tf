@@ -29,6 +29,7 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
 
   cpu {
     cores = var.cores
+    type  = var.cpu_type
   }
 
   serial {

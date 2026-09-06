@@ -37,6 +37,7 @@ Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:dest
 - Cilium chart pin and values live in `cilium/` (`version.yaml`, `values.yaml`). That directory is self-contained so it can become a git submodule shared with the ArgoCD repo; see `cilium/README.md` for the contract
 - Node-to-node ports: 16443 (API), 25000 (join), 10250 (kubelet), 8472/udp (Cilium VXLAN), 4240 (Cilium health). The VMs' NICs have the Proxmox firewall flag set, so keep the VM firewall disabled or allow these
 - Control plane VM has 8192 MB (`memory` in `k8s.auto.tfvars`), workers 4096 MB
+- Per-VM options in `virtual_machines` (`<env>.auto.tfvars`): `cores`, `cpu_type` (default `x86-64-v2-AES`; `host` exposes the full CPU), `memory`, `disk_size`, `disk_storage`, `network_bridge`, `network_tag`, `role`
 - The kubeconfig is fetched to `ansible/artifacts/k8s.kubeconfig` (gitignored): `export KUBECONFIG=$PWD/ansible/artifacts/k8s.kubeconfig && kubectl get nodes`
 - Re-running the playbook is safe: nodes already in the cluster are not joined again
 
