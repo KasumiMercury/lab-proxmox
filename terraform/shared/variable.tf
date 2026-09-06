@@ -49,10 +49,18 @@ variable "nameserver" {
   default     = "8.8.8.8"
 }
 
-# Optional: attach a common cloud-init snippet to all VMs
-# Example value: "user=local:snippets/ansible-user.yml"
-variable "cicustom" {
-  description = "Cloud-init custom snippet reference for all VMs (optional)"
+# Optional: cloud-init vendor-data snippet attached to all VMs.
+# Passed to Proxmox as cicustom "vendor=<value>", so the user-data that Proxmox
+# generates from ciuser / cipassword / sshkeys stays intact. "user=" is not
+# supported on purpose: it would replace that user-data and drop the
+# Terraform-managed user, password and SSH key.
+# Example value: "local:snippets/password-auth.yml"
+variable "cloudinit_vendor_snippet" {
+  description = "Proxmox snippet reference (<storage>:snippets/<file>) used as cloud-init vendor-data for all VMs (optional)"
   type        = string
   default     = null
+  validation {
+    condition     = var.cloudinit_vendor_snippet == null || can(regex("^[^:=,]+:snippets/.+$", var.cloudinit_vendor_snippet))
+    error_message = "Must be a Proxmox snippet reference like \"local:snippets/password-auth.yml\" (no \"user=\"/\"vendor=\" prefix)."
+  }
 }

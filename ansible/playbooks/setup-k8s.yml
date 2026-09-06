@@ -1,7 +1,0 @@
----
-- name: Setup k8s VM baseline configuration
-  hosts: all
-  become: true
-  gather_facts: true
-  roles:
-    - baseline
