@@ -5,9 +5,15 @@
 - File: `ansible/inventory/<env>.ini` with group `[<env>]`
 
 ## Playbooks
-- `playbooks/setup-test.yml`
-- `playbooks/setup-k8s.yml`
-- `task ansible:run TF_ENV=<env>`
+- `playbooks/setup.yml`: waits for SSH, then applies role `baseline` (Japanese locale, timezone, keyboard, bashtop)
+- `task ansible:run TF_ENV=<env>` uses `playbooks/setup-<env>.yml` when it exists, otherwise `playbooks/setup.yml`
+- Roles live in `roles/` (`roles_path` in `ansible.cfg`)
+
+## Cloud-init snippets (`cloudinit-snippets/`)
+- Terraform owns the user-data: Proxmox generates it from `ciuser` / `cipassword` / `sshkeys`. Snippets are attached as vendor-data only (`cloudinit_vendor_snippet` in tfvars), so they add policy without touching the user
+- `password-auth.yml`: enables SSH password auth (`ssh_pwauth: true`, root login stays disabled). Required for `ANSIBLE_USE_PASSWORDS=true`
+- Without a snippet the Terraform-managed user has key-only SSH and passwordless sudo (Ubuntu cloud image defaults)
+- Upload: `task proxmox:upload-snippet HOST=user@pve [SRC=...] [DEST=...]`
 
 ## SSH Auth
 - `ANSIBLE_USE_PASSWORDS`: `true` or `false` (default: `false`) to include/exclude passwords in inventory
