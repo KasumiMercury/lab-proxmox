@@ -38,9 +38,9 @@ Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:dest
 - Inventory output: `ansible/inventory/<env>.ini`
 - Playbook: `ansible/playbooks/setup.yml`. If `ansible/playbooks/setup-<env>.yml` exists it is used instead (override with `ANSIBLE_PLAYBOOK=...`)
 - Cloud-init: Proxmox generates user-data from Terraform (`ciuser` / `cipassword` / `sshkeys`). On Ubuntu cloud images that user gets passwordless sudo and key-only SSH by default, so no snippet is needed for the default (key-based) Ansible flow
-- To allow SSH password auth (needed for `ANSIBLE_USE_PASSWORDS=true`), attach `ansible/cloudinit-snippets/password-auth.yml` as vendor-data. Upload it with `task proxmox:upload-snippet HOST=user@pve` (the storage must have the `snippets` content type enabled), then set in `terraform/environments/<env>/*.auto.tfvars`:
+- To allow SSH password auth (needed for `ANSIBLE_USE_PASSWORDS=true`), attach `ansible/cloudinit-snippets/password-auth.yml` as vendor-data. Upload it once with `task pve:snippet HOST=user@hod` (goes to the shared NFS storage `strix0`, which has the `snippets` content type enabled, so all nodes see it), then set in `terraform/environments/<env>/*.auto.tfvars`:
   ```hcl
-  cloudinit_vendor_snippet = "local:snippets/password-auth.yml"
+  cloudinit_vendor_snippet = "strix0:snippets/password-auth.yml"
   ```
 
 

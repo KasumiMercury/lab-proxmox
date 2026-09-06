@@ -200,11 +200,12 @@ tasks:
     vars:
       HOST: '{{.HOST | default ""}}'
       SRC: '{{.SRC | default "ansible/cloudinit-snippets/password-auth.yml"}}'
-      DEST: '{{.DEST | default "/var/lib/vz/snippets/password-auth.yml"}}'
+      # strix0 is the shared NFS storage (snippets enabled), so one upload serves every node
+      DEST: '{{.DEST | default "/mnt/pve/strix0/snippets/password-auth.yml"}}'
     cmds:
       - |
         if [ -z "{{.HOST}}" ]; then
-          echo "Usage: task proxmox:upload-snippet HOST=user@host [SRC=ansible/cloudinit-snippets/password-auth.yml] [DEST=/var/lib/vz/snippets/password-auth.yml]" >&2
+          echo "Usage: task proxmox:upload-snippet HOST=user@host [SRC=ansible/cloudinit-snippets/password-auth.yml] [DEST=/mnt/pve/strix0/snippets/password-auth.yml]" >&2
           exit 1
         fi
         if [ ! -f "{{.SRC}}" ]; then
