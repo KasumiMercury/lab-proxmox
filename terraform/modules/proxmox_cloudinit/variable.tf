@@ -55,6 +55,22 @@ variable "gateway" {
   }
 }
 
+variable "ip_prefix_length" {
+  description = "Network prefix length for ip_address (e.g., 24)"
+  type        = number
+  default     = 24
+  validation {
+    condition     = var.ip_prefix_length >= 1 && var.ip_prefix_length <= 32
+    error_message = "Prefix length must be between 1 and 32."
+  }
+}
+
+variable "nameserver" {
+  description = "DNS server for the VM"
+  type        = string
+  default     = "8.8.8.8"
+}
+
 variable "network_bridge" {
   description = "Network bridge to use"
   type        = string
@@ -75,6 +91,12 @@ variable "disk_size" {
   description = "Size of the disk in GB"
   type        = number
   default     = 32
+}
+
+variable "disk_storage" {
+  description = "Storage pool for the primary disk"
+  type        = string
+  default     = "local-lvm"
 }
 
 /*

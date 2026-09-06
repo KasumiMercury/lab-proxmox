@@ -18,9 +18,9 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
 
   memory = var.memory
 
-  ipconfig0 = "ip=${var.ip_address}/24,gw=${var.gateway},ip6=dhcp"
+  ipconfig0 = "ip=${var.ip_address}/${var.ip_prefix_length},gw=${var.gateway},ip6=dhcp"
 
-  nameserver = "8.8.8.8"
+  nameserver = var.nameserver
 
   ciuser = var.username
   # cipassword = var.password
@@ -47,7 +47,7 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
     scsi {
       scsi0 {
         disk {
-          storage = "local-lvm"
+          storage = var.disk_storage
           size    = "${var.disk_size}G"
         }
       }
