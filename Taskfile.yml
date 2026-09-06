@@ -7,7 +7,9 @@ includes:
 vars:
   TF_ENV: '{{.TF_ENV | default "test"}}'
   ANSIBLE_USE_PASSWORDS: '{{.ANSIBLE_USE_PASSWORDS | default "false"}}'
-  ANSIBLE_PLAYBOOK: '{{- $map := dict "test" "playbooks/setup-test.yml" "k8s" "playbooks/setup-k8s.yml" -}}{{- if hasKey $map .TF_ENV -}}{{ index $map .TF_ENV }}{{- else -}}playbooks/setup-{{ .TF_ENV }}.yml{{- end -}}'
+  # playbooks/setup-<env>.yml があればそれを、なければ共通の playbooks/setup.yml を使う
+  ANSIBLE_PLAYBOOK:
+    sh: 'if [ -f "ansible/playbooks/setup-{{.TF_ENV}}.yml" ]; then echo "playbooks/setup-{{.TF_ENV}}.yml"; else echo "playbooks/setup.yml"; fi'
   ANSIBLE_INVENTORY_FILE: 'inventory/{{.TF_ENV}}.ini'
 
 tasks:
@@ -67,9 +69,6 @@ tasks:
     desc: Complete deployment workflow (Terraform apply + Ansible setup)
     cmds:
       - task: terraform:apply
-      - |
-        echo "Waiting for VM to be ready..."
-        sleep 30
       - task: ansible:setup
 
   destroy-all:
@@ -177,15 +176,15 @@ tasks:
         ansible -i {{.ANSIBLE_INVENTORY_FILE}} $OPTS all -m ping
 
   proxmox:upload-snippet:
-    desc: "Copy a snippet (default: password-auth.yml) to Proxmox snippets on target host"
+    desc: "Copy a cloud-init snippet (default: ansible/cloudinit-snippets/password-auth.yml) to Proxmox snippets on target host"
     vars:
       HOST: '{{.HOST | default ""}}'
-      SRC: '{{.SRC | default "password-auth.yml"}}'
+      SRC: '{{.SRC | default "ansible/cloudinit-snippets/password-auth.yml"}}'
       DEST: '{{.DEST | default "/var/lib/vz/snippets/password-auth.yml"}}'
     cmds:
       - |
         if [ -z "{{.HOST}}" ]; then
-          echo "Usage: task proxmox:upload-snippet HOST=user@host [SRC=password-auth.yml] [DEST=/var/lib/vz/snippets/password-auth.yml]" >&2
+          echo "Usage: task proxmox:upload-snippet HOST=user@host [SRC=ansible/cloudinit-snippets/password-auth.yml] [DEST=/var/lib/vz/snippets/password-auth.yml]" >&2
           exit 1
         fi
         if [ ! -f "{{.SRC}}" ]; then
