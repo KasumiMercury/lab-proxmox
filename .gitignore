@@ -15,3 +15,5 @@ ansible/inventory/*.ini
 
 # Env files (local only)
 .env
+
+.vault_pass.txt
