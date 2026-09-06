@@ -1,0 +1,17 @@
+---
+- name: Setup VM baseline (locale, timezone, keyboard, tooling)
+  hosts: all
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Wait for SSH to become reachable
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+      tags: [wait]
+
+    - name: Gather facts
+      ansible.builtin.setup:
+      tags: [always]
+
+  roles:
+    - baseline
