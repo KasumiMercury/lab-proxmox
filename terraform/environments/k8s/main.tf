@@ -60,6 +60,9 @@ module "proxmox_cloudinit" {
   vm_name           = each.value.vm_name
   template          = each.value.template
   target_node       = each.value.target_node
+  cores             = each.value.cores
+  memory            = each.value.memory
+  disk_size         = each.value.disk_size
   ip_address        = each.value.ip_address
   gateway           = each.value.gateway
   network_bridge    = each.value.network_bridge
