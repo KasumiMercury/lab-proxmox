@@ -1,0 +1,8 @@
+[tools]
+terraform = "1.16.1"
+task = "3.53.1"
+jq = "1.8.2"
+lefthook = "2.1.12"
+tflint = "0.57.0"
+trivy = "0.74.0"
+"pipx:ansible" = { version = "14.3.1", uvx_args = "--with-executables-from ansible-core", pipx_args = "--include-deps" }
