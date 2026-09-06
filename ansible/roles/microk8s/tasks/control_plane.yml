@@ -1,0 +1,36 @@
+---
+# Runs on the control-plane node.
+
+- name: Install Cilium as the cluster CNI
+  ansible.builtin.include_tasks: cilium_control_plane.yml
+  when: microk8s_cni == "cilium"
+  tags: [microk8s, cilium]
+
+- name: Enable MicroK8s addons
+  ansible.builtin.command: microk8s enable {{ item }}
+  loop: "{{ microk8s_addons }}"
+  register: microk8s_enable
+  changed_when: "'already enabled' not in microk8s_enable.stdout"
+  tags: [microk8s, addons]
+
+- name: Read the cluster kubeconfig
+  ansible.builtin.command: microk8s config
+  register: microk8s_config
+  changed_when: false
+  no_log: true
+  tags: [microk8s, kubeconfig]
+
+- name: Save the kubeconfig on the Ansible controller
+  ansible.builtin.copy:
+    content: "{{ microk8s_config.stdout }}\n"
+    dest: "{{ microk8s_kubeconfig_dest }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  no_log: true
+  tags: [microk8s, kubeconfig]
+
+- name: Show how to use the kubeconfig
+  ansible.builtin.debug:
+    msg: "kubeconfig saved: {{ microk8s_kubeconfig_dest | realpath }} (export KUBECONFIG=<that path>)"
+  tags: [microk8s, kubeconfig]

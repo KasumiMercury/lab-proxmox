@@ -1,0 +1,40 @@
+---
+# Runs on every cluster node: install MicroK8s and make nodes resolvable by name.
+
+- name: Ensure snapd is installed
+  ansible.builtin.apt:
+    name: snapd
+    state: present
+  tags: [microk8s, packages]
+
+- name: Install MicroK8s from snap
+  community.general.snap:
+    name: microk8s
+    classic: true
+    channel: "{{ microk8s_channel }}"
+  tags: [microk8s, packages]
+
+- name: Allow the Ansible user to run microk8s without sudo
+  ansible.builtin.user:
+    name: "{{ ansible_user | default(ansible_user_id) }}"
+    groups: microk8s
+    append: true
+  tags: [microk8s]
+
+- name: Register every cluster node in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '\s{{ item }}$'
+    line: "{{ hostvars[item].ansible_host }} {{ item }}"
+  loop: "{{ groups[microk8s_cluster_group] }}"
+  tags: [microk8s, hosts]
+
+- name: Wait for MicroK8s to be ready on this node
+  ansible.builtin.command: microk8s status --wait-ready --timeout {{ microk8s_ready_timeout }}
+  changed_when: false
+  tags: [microk8s]
+
+- name: Prepare this node for Cilium
+  ansible.builtin.include_tasks: cilium_node.yml
+  when: microk8s_cni == "cilium"
+  tags: [microk8s, cilium]

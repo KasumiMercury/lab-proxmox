@@ -16,3 +16,7 @@ ansible/inventory/*.ini
 .env
 
 .vault_pass.txt
+
+# Ansible artifacts fetched from hosts (kubeconfig etc.)
+ansible/artifacts/*
+!ansible/artifacts/.keep

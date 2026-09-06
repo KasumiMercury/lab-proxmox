@@ -4,16 +4,15 @@
 - Generate: `task ansible:generate-inventory TF_ENV=<env>`
 - File: `ansible/inventory/<env>.ini` with group `[<env>]`
 
+## Inventory groups
+- `scripts/generate_inventory.sh` writes `[<env>]` with every VM. VMs with a non-empty Terraform `role` are also listed in `[<env>_<role>]` (hyphens become underscores), e.g. `k8s_control_plane`, `k8s_worker`
+
 ## Playbooks
 - `playbooks/setup.yml`: waits for SSH, then applies role `baseline` (Japanese locale, timezone, keyboard, bashtop)
+- `playbooks/setup-k8s.yml`: imports `setup.yml`, installs MicroK8s on `[k8s]`, bootstraps `[k8s_control_plane]` (addons, kubeconfig to `artifacts/k8s.kubeconfig`), then joins `[k8s_worker]` one node at a time with `microk8s join ... --worker`
 - `task ansible:run TF_ENV=<env>` uses `playbooks/setup-<env>.yml` when it exists, otherwise `playbooks/setup.yml`
-- Roles live in `roles/` (`roles_path` in `ansible.cfg`)
-
-## Cloud-init snippets (`cloudinit-snippets/`)
-- Terraform owns the user-data: Proxmox generates it from `ciuser` / `cipassword` / `sshkeys`. Snippets are attached as vendor-data only (`cloudinit_vendor_snippet` in tfvars), so they add policy without touching the user
-- `password-auth.yml`: enables SSH password auth (`ssh_pwauth: true`, root login stays disabled). Required for `ANSIBLE_USE_PASSWORDS=true`
-- Without a snippet the Terraform-managed user has key-only SSH and passwordless sudo (Ubuntu cloud image defaults)
-- Upload: `task pve:snippet HOST=user@hod [SRC=...] [DEST=...]` (default DEST is `/mnt/pve/strix0/snippets/`, the shared NFS storage). Reference it as `strix0:snippets/<file>`
+- Roles live in `roles/` (`roles_path` in `ansible.cfg`). MicroK8s settings (`microk8s_channel`, `microk8s_addons`, `microk8s_cni`, `cilium_config_dir`, group names, timeouts) are in `roles/microk8s/defaults/main.yml`
+- Cilium: every node gets host-side prep (`tasks/cilium_node.yml`, including `tasks/kube_proxy_disable.yml` when the shared values set `kubeProxyReplacement: true`; workers re-run it after join); the control plane deletes the Calico manifest, disables it for restarts, and, if the `cilium` DaemonSet does not exist yet, runs `microk8s helm3 install cilium --values cilium/values.yaml` with the chart from `cilium/version.yaml` (`tasks/cilium_control_plane.yml`). The pod CIDR in the values file is asserted against kube-proxy. Existing installations are left to ArgoCD
 
 ## SSH Auth
 - `ANSIBLE_USE_PASSWORDS`: `true` or `false` (default: `false`) to include/exclude passwords in inventory

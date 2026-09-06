@@ -1,0 +1,60 @@
+---
+# Disable MicroK8s' kube-proxy when the shared Cilium values enable kubeProxyReplacement.
+# kube-proxy runs inside kubelite and has no off switch, so it is started with --init-only: it applies the
+# node sysctls it normally sets, programs no rules and returns cleanly, and kubelite keeps running without it.
+# Rules left by the initial (normal) kube-proxy run are removed once, as in the Cilium kube-proxy-free guide.
+# Applied on every node; re-applied on workers after `microk8s join` because the join rewrites the args file.
+
+- name: Load the shared Cilium values
+  ansible.builtin.set_fact:
+    cilium_values: "{{ lookup('ansible.builtin.file', cilium_config_dir ~ '/values.yaml') | from_yaml }}"
+  tags: [microk8s, cilium, kube-proxy]
+
+- name: Disable kube-proxy for Cilium kube-proxy replacement
+  when: cilium_values.kubeProxyReplacement | default(false) | bool
+  tags: [microk8s, cilium, kube-proxy]
+  block:
+    - name: Make kube-proxy initialize the node and exit without programming rules
+      ansible.builtin.lineinfile:
+        path: "{{ microk8s_snap_data }}/args/kube-proxy"
+        line: "--init-only"
+        regexp: '^--init-only'
+      register: kube_proxy_args
+
+    - name: Restart kubelite so kube-proxy exits
+      ansible.builtin.command: snap restart microk8s.daemon-kubelite
+      when: kube_proxy_args.changed
+
+    - name: Wait for MicroK8s to come back
+      ansible.builtin.command: microk8s status --wait-ready --timeout {{ microk8s_ready_timeout }}
+      changed_when: false
+      when: kube_proxy_args.changed
+
+    - name: Confirm kubelite stayed up after kube-proxy exited
+      ansible.builtin.shell: >
+        systemctl is-active snap.microk8s.daemon-kubelite
+        && journalctl -u snap.microk8s.daemon-kubelite --since '-5min' --no-pager | grep -q 'Stopping Proxy'
+      changed_when: false
+      when: kube_proxy_args.changed
+
+    - name: Remove the rules left behind by the initial kube-proxy run
+      ansible.builtin.shell: |
+        {{ item }}-save | grep -v KUBE | {{ item }}-restore
+      loop: [iptables, ip6tables]
+      when: kube_proxy_args.changed
+  rescue:
+    - name: Roll back the kube-proxy change
+      ansible.builtin.lineinfile:
+        path: "{{ microk8s_snap_data }}/args/kube-proxy"
+        regexp: '^--init-only'
+        state: absent
+
+    - name: Restart kubelite with kube-proxy enabled again
+      ansible.builtin.command: snap restart microk8s.daemon-kubelite
+
+    - name: Stop with an explanation
+      ansible.builtin.fail:
+        msg: >-
+          kube-proxy --init-only did not exit cleanly on {{ inventory_hostname }} (kubelite would crash-loop),
+          so the change was rolled back. Check `journalctl -u snap.microk8s.daemon-kubelite`; as a fallback set
+          kubeProxyReplacement: false in cilium/values.yaml.

@@ -1,0 +1,43 @@
+---
+# Baseline for every VM, then a MicroK8s cluster:
+#   control plane = hosts in [k8s_control_plane], workers = hosts in [k8s_worker]
+# (groups come from the VM "role" in terraform/environments/k8s/k8s.auto.tfvars)
+
+- import_playbook: setup.yml
+
+- name: Install MicroK8s on all cluster nodes
+  hosts: k8s
+  become: true
+  roles:
+    - microk8s
+
+- name: Bootstrap the control plane
+  hosts: k8s_control_plane
+  become: true
+  tasks:
+    - name: Configure the control plane
+      ansible.builtin.include_role:
+        name: microk8s
+        tasks_from: control_plane
+
+- name: Join worker nodes
+  hosts: k8s_worker
+  become: true
+  serial: 1
+  tasks:
+    - name: Join this node to the cluster
+      ansible.builtin.include_role:
+        name: microk8s
+        tasks_from: worker
+
+- name: Show cluster nodes
+  hosts: k8s_control_plane
+  become: true
+  tasks:
+    - name: Get nodes
+      ansible.builtin.command: microk8s kubectl get nodes -o wide
+      changed_when: false
+      register: microk8s_get_nodes
+    - name: Cluster status
+      ansible.builtin.debug:
+        msg: "{{ microk8s_get_nodes.stdout_lines }}"
