@@ -1,7 +1,7 @@
 template          = "noble-template"
 cloudinit_storage = "strix0"
-# Enable SSH password auth via vendor-data (upload first: task proxmox:upload-snippet HOST=user@pve)
-# cloudinit_vendor_snippet = "local:snippets/password-auth.yml"
+# Enable SSH password auth via vendor-data (upload first: task pve:snippet HOST=user@hod)
+# cloudinit_vendor_snippet = "strix0:snippets/password-auth.yml"
 
 virtual_machines = {
   "hod" = {

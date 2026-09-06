@@ -13,7 +13,7 @@
 - Terraform owns the user-data: Proxmox generates it from `ciuser` / `cipassword` / `sshkeys`. Snippets are attached as vendor-data only (`cloudinit_vendor_snippet` in tfvars), so they add policy without touching the user
 - `password-auth.yml`: enables SSH password auth (`ssh_pwauth: true`, root login stays disabled). Required for `ANSIBLE_USE_PASSWORDS=true`
 - Without a snippet the Terraform-managed user has key-only SSH and passwordless sudo (Ubuntu cloud image defaults)
-- Upload: `task proxmox:upload-snippet HOST=user@pve [SRC=...] [DEST=...]`
+- Upload: `task pve:snippet HOST=user@hod [SRC=...] [DEST=...]` (default DEST is `/mnt/pve/strix0/snippets/`, the shared NFS storage). Reference it as `strix0:snippets/<file>`
 
 ## SSH Auth
 - `ANSIBLE_USE_PASSWORDS`: `true` or `false` (default: `false`) to include/exclude passwords in inventory
