@@ -1,7 +1,3 @@
-provider "cloudflare" {
-  # token pulled from $CLOUDFLARE_API_TOKEN
-}
-
 provider "proxmox" {
   pm_tls_insecure = true
   # Proxmox API credentials expected via environment variables:

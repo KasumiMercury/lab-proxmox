@@ -12,10 +12,6 @@ terraform {
     use_lockfile                = true
   }
   required_providers {
-    cloudflare = {
-      source  = "cloudflare/cloudflare"
-      version = "~> 4"
-    }
     proxmox = {
       source  = "Telmate/proxmox"
       version = "3.0.2-rc04"
