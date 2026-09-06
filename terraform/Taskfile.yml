@@ -72,3 +72,45 @@ tasks:
         task: gpg-encrypt-file
         vars:
           CLI_ARGS: "{{.ITEM}}"
+
+  gpg-decrypt-file:
+    desc: "Decrypts a *.gpg file with GPG (output: path without .gpg suffix)"
+    dir: "{{.USER_WORKING_DIR}}"
+    silent: true
+    vars:
+      TARGET_FILE: "{{.CLI_ARGS}}"
+      OUTPUT_FILE: "{{ .CLI_ARGS | trimSuffix \".gpg\" }}"
+    dotenv: ['.env']
+    cmds:
+      - |
+        if [ ! -f "{{ .TARGET_FILE }}" ]; then
+          echo 'File not found: {{ .TARGET_FILE }}' >&2
+          exit 1
+        fi
+        case "{{ .TARGET_FILE }}" in
+          *.gpg) ;;
+          *) echo 'Target file must end with .gpg: {{ .TARGET_FILE }}' >&2; exit 1 ;;
+        esac
+        PASS="${GPG_PASS:-}"
+        if [ -z "$PASS" ]; then
+          printf 'Enter GPG passphrase: ' >&2; stty -echo; IFS= read -r PASS; stty echo; echo >&2
+        fi
+        printf '%s' "$PASS" | gpg --decrypt --output {{ .OUTPUT_FILE }} --batch --yes --passphrase-fd 0 {{ .TARGET_FILE }}
+        unset PASS
+        chmod 0600 {{ .OUTPUT_FILE }}
+        echo 'Decrypted file : {{ .OUTPUT_FILE }}'
+
+  decrypt-tfvars-json:
+    aliases:
+      - decrypt
+    desc: "Decrypts all files ending with tfvars.json.gpg in the specified directory"
+    dir: "{{.USER_WORKING_DIR}}"
+    silent: true
+    vars:
+      FILES:
+        sh: find {{.CLI_ARGS}} -name "*tfvars.json.gpg" -type f -print
+    cmds:
+      - for: { var: FILES, split: "\n" }
+        task: gpg-decrypt-file
+        vars:
+          CLI_ARGS: "{{.ITEM}}"

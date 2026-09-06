@@ -8,7 +8,7 @@
 - `AWS_S3_ENDPOINT`: custom S3 endpoint (MinIO, Ceph, etc.)
 - `CLOUDFLARE_API_TOKEN`: only if Cloudflare provider is used
 
-- `GPG_PASS`: used by `task -d terraform encrypt ...`; 空なら実行時に対話で入力
+- `GPG_PASS`: used by `task -d terraform encrypt ...` / `task -d terraform decrypt ...`; 空なら実行時に対話で入力
 - `ANSIBLE_PRIVATE_KEY_FILE`, `ANSIBLE_VAULT_PASSWORD_FILE`, `ANSIBLE_REMOTE_USER`: override defaults when running Ansible tasks
 
 ## Workflow
@@ -39,7 +39,10 @@
   ```
 
 ## Secrets
-- Keep decrypted tfvars outside git; commit only `*.tfvars.json.gpg`
+- Keep decrypted tfvars outside git; commit only `*.tfvars.json.gpg` (`*.tfvars.json` is gitignored)
+- Encrypt: `task -d terraform encrypt -- terraform/environments/<env>` → `*.tfvars.json.gpg`
+- Decrypt: `task -d terraform decrypt -- terraform/environments/<env>` → `*.tfvars.json` (0600, overwrites existing)
+- Single file: `task -d terraform gpg-decrypt-file -- terraform/environments/k8s/k8s_credential.auto.tfvars.json.gpg`
 - `task ansible:vault-passfile` → `.vault_pass.txt` (gitignored)
 - `task ansible:vault-hostvars-generate TF_ENV=test` → encrypted `ansible/host_vars/<vm>/vault.yml`
 - No-password inventory: `ANSIBLE_USE_PASSWORDS=false task ansible:generate-inventory TF_ENV=test`
