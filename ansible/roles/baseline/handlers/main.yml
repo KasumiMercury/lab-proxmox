@@ -1,14 +1,14 @@
 ---
 - name: restart systemd-timesyncd
-  systemd:
+  ansible.builtin.systemd:
     name: systemd-timesyncd
     state: restarted
 
 - name: reconfigure keyboard
-  command: dpkg-reconfigure -f noninteractive keyboard-configuration
+  ansible.builtin.command: dpkg-reconfigure -f noninteractive keyboard-configuration
   notify: restart console-setup
 
 - name: restart console-setup
-  systemd:
+  ansible.builtin.systemd:
     name: console-setup
     state: restarted
