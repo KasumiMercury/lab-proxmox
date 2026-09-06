@@ -1,0 +1,80 @@
+---
+# Replace the default Calico CNI with Cilium (control plane, before workers join).
+# Bootstrap only: once Cilium exists, Ansible leaves it alone (ArgoCD owns upgrades).
+
+- name: Check whether the default Calico manifest is still active
+  ansible.builtin.stat:
+    path: "{{ microk8s_snap_data }}/args/cni-network/cni.yaml"
+  register: microk8s_calico_manifest
+  tags: [microk8s, cilium]
+
+- name: Remove Calico from the cluster
+  ansible.builtin.command: microk8s kubectl delete --ignore-not-found -f {{ microk8s_snap_data }}/args/cni-network/cni.yaml
+  when: microk8s_calico_manifest.stat.exists
+  tags: [microk8s, cilium]
+
+- name: Keep MicroK8s from re-applying Calico after a restart
+  ansible.builtin.command: mv {{ microk8s_snap_data }}/args/cni-network/cni.yaml {{ microk8s_snap_data }}/args/cni-network/cni.yaml.disabled
+  when: microk8s_calico_manifest.stat.exists
+  tags: [microk8s, cilium]
+
+- name: Check whether Cilium is already installed
+  ansible.builtin.command: microk8s kubectl -n kube-system get daemonset cilium -o name
+  register: microk8s_cilium_ds
+  changed_when: false
+  failed_when: false
+  tags: [microk8s, cilium]
+
+- name: Bootstrap Cilium from the shared cilium/ configuration
+  when: microk8s_cilium_ds.rc != 0
+  tags: [microk8s, cilium]
+  block:
+    - name: Load the shared chart pin and values
+      ansible.builtin.set_fact:
+        cilium_chart_pin: "{{ lookup('ansible.builtin.file', cilium_config_dir ~ '/version.yaml') | from_yaml }}"
+        cilium_values: "{{ lookup('ansible.builtin.file', cilium_config_dir ~ '/values.yaml') | from_yaml }}"
+
+    - name: Detect the pod CIDR configured for kube-proxy
+      ansible.builtin.shell: grep -oE -- '--cluster-cidr=\S+' {{ microk8s_snap_data }}/args/kube-proxy | cut -d= -f2
+      register: microk8s_cluster_cidr
+      changed_when: false
+      failed_when: false
+
+    - name: Make sure the shared values use this cluster's pod CIDR
+      ansible.builtin.assert:
+        that:
+          - (microk8s_cluster_cidr.stdout | trim) in (cilium_values.ipam.operator.clusterPoolIPv4PodCIDRList | default([]))
+        fail_msg: >-
+          kube-proxy uses --cluster-cidr={{ microk8s_cluster_cidr.stdout | trim }} but cilium/values.yaml lists
+          {{ cilium_values.ipam.operator.clusterPoolIPv4PodCIDRList | default([]) }}. Update the values file.
+      when: microk8s_cluster_cidr.rc == 0 and (microk8s_cluster_cidr.stdout | trim | length > 0)
+
+    - name: Copy the shared values file to the control plane
+      ansible.builtin.copy:
+        src: "{{ cilium_config_dir }}/values.yaml"
+        dest: /var/snap/microk8s/common/cilium-values.yaml
+        mode: "0644"
+
+    - name: Add the Cilium Helm repository
+      ansible.builtin.command: microk8s helm3 repo add cilium {{ cilium_chart_pin.repo }} --force-update
+      changed_when: false
+
+    - name: Update the Cilium Helm repository
+      ansible.builtin.command: microk8s helm3 repo update cilium
+      changed_when: false
+
+    - name: Install Cilium
+      ansible.builtin.command: >
+        microk8s helm3 install cilium cilium/{{ cilium_chart_pin.chart }}
+        --version {{ cilium_chart_pin.version }} --namespace kube-system
+        --values /var/snap/microk8s/common/cilium-values.yaml
+
+- name: Wait for the Cilium agents
+  ansible.builtin.command: microk8s kubectl -n kube-system rollout status ds/cilium --timeout={{ microk8s_ready_timeout }}s
+  changed_when: false
+  tags: [microk8s, cilium]
+
+- name: Wait for the Cilium operator
+  ansible.builtin.command: microk8s kubectl -n kube-system rollout status deploy/cilium-operator --timeout={{ microk8s_ready_timeout }}s
+  changed_when: false
+  tags: [microk8s, cilium]

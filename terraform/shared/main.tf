@@ -56,6 +56,7 @@ output "vm_connection_info" {
       name           = vm_instance.vm_name
       ip_address     = vm_instance.vm_ip
       ssh_connection = vm_instance.ssh_connection
+      role           = var.virtual_machines[vm_key].role
     }
   }
   sensitive = true

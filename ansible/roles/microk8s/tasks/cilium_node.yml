@@ -1,0 +1,21 @@
+---
+# Host-side preparation for Cilium, applied to every node before it joins the cluster.
+
+- name: Let containerd load CNI binaries from the writable snap data dir (older MicroK8s only)
+  ansible.builtin.replace:
+    path: "{{ microk8s_snap_data }}/args/containerd-template.toml"
+    regexp: '^(\s*bin_dir = ")\$\{SNAP\}(/opt/cni/bin")'
+    replace: '\g<1>${SNAP_DATA}\g<2>'
+  notify: restart microk8s containerd
+  tags: [microk8s, cilium]
+
+- name: Ensure the CNI binary directory exists
+  ansible.builtin.file:
+    path: "{{ microk8s_snap_data }}/opt/cni/bin"
+    state: directory
+    mode: "0755"
+  tags: [microk8s, cilium]
+
+- name: Disable kube-proxy when Cilium replaces it
+  ansible.builtin.include_tasks: kube_proxy_disable.yml
+  tags: [microk8s, cilium, kube-proxy]

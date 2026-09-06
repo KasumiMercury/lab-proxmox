@@ -28,6 +28,18 @@ Ansible tasks (`ans:ping`, `ans:run`, `ans:setup`, `deploy`) also depend on `ssh
 
 Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:destroy` `tf:output` `tf:passwords` `tf:encrypt` `tf:decrypt` `ans:inventory` `ans:ping` `ans:run` `ans:setup` `ans:vault-hostvars` `ssh:key` `pve:snippet`
 
+## Kubernetes (k8s environment)
+`task deploy TF_ENV=k8s` creates the three VMs and builds a MicroK8s cluster: `k8s-hod` is the control plane, `k8s-netzach` and `k8s-yesod` are workers.
+- Roles come from `role` in `terraform/environments/k8s/k8s.auto.tfvars` (`control-plane` / `worker`) and become the inventory groups `k8s_control_plane` / `k8s_worker`
+- Playbook: `ansible/playbooks/setup-k8s.yml` (baseline for all VMs, then role `microk8s`). Channel and addons are set in `ansible/roles/microk8s/defaults/main.yml` (default `1.36/stable`, addon `dns`)
+- CNI is Cilium, bootstrapped with the bundled `microk8s helm3` on the control plane before workers join (the default Calico is removed). Ansible installs it only on a fresh cluster and never touches an existing installation; every later change (version, custom builds, features) is managed by ArgoCD. Set `microk8s_cni: calico` to keep the MicroK8s default
+- Cilium runs as kube-proxy replacement from the start (`kubeProxyReplacement: true`, API via `127.0.0.1:16443` on every node). MicroK8s has no switch for kube-proxy, so Ansible starts it with `--init-only` (it applies its node sysctls, programs no rules and exits; kubelite keeps running), removes the rules left by the first run, and rolls the change back automatically if kubelite does not stay up
+- Cilium chart pin and values live in `cilium/` (`version.yaml`, `values.yaml`). That directory is self-contained so it can become a git submodule shared with the ArgoCD repo; see `cilium/README.md` for the contract
+- Node-to-node ports: 16443 (API), 25000 (join), 10250 (kubelet), 8472/udp (Cilium VXLAN), 4240 (Cilium health). The VMs' NICs have the Proxmox firewall flag set, so keep the VM firewall disabled or allow these
+- Control plane VM has 8192 MB (`memory` in `k8s.auto.tfvars`), workers 4096 MB
+- The kubeconfig is fetched to `ansible/artifacts/k8s.kubeconfig` (gitignored): `export KUBECONFIG=$PWD/ansible/artifacts/k8s.kubeconfig && kubectl get nodes`
+- Re-running the playbook is safe: nodes already in the cluster are not joined again
+
 ## Terraform Layout
 - `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
 - `terraform/environments/<env>/`: symlinks to `shared/*.tf` plus `<env>.auto.tfvars`, `<env>_credential.auto.tfvars.json(.gpg)`, `.terraform.lock.hcl`

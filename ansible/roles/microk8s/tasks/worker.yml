@@ -1,0 +1,37 @@
+---
+# Runs on each worker node (play should use serial: 1 so joins do not overlap).
+
+- name: List nodes already in the cluster
+  ansible.builtin.command: microk8s kubectl get nodes -o name
+  register: microk8s_nodes
+  changed_when: false
+  delegate_to: "{{ groups[microk8s_control_plane_group][0] }}"
+  tags: [microk8s, join]
+
+- name: Create a join token on the control plane
+  ansible.builtin.command: microk8s add-node --token-ttl 3600
+  register: microk8s_add_node
+  changed_when: false
+  delegate_to: "{{ groups[microk8s_control_plane_group][0] }}"
+  when: ('node/' ~ ansible_hostname) not in microk8s_nodes.stdout_lines
+  tags: [microk8s, join]
+
+- name: Join the cluster as a worker
+  vars:
+    # first "microk8s join <ip>:25000/<token>/<hash>" line of the add-node output
+    microk8s_join_url: "{{ (microk8s_add_node.stdout_lines | select('match', '^microk8s join ') | map('split') | first)[2] }}"
+  ansible.builtin.command: microk8s join {{ microk8s_join_url }} --worker
+  when: ('node/' ~ ansible_hostname) not in microk8s_nodes.stdout_lines
+  tags: [microk8s, join]
+
+- name: Re-apply the kube-proxy setting (join rewrites the args file)
+  ansible.builtin.include_tasks: kube_proxy_disable.yml
+  when: microk8s_cni == "cilium"
+  tags: [microk8s, cilium, kube-proxy]
+
+- name: Wait for the node to become Ready
+  ansible.builtin.command: >
+    microk8s kubectl wait --for=condition=Ready node/{{ ansible_hostname }} --timeout={{ microk8s_ready_timeout }}s
+  changed_when: false
+  delegate_to: "{{ groups[microk8s_control_plane_group][0] }}"
+  tags: [microk8s, join]
