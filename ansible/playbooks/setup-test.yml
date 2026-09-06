@@ -1,7 +1,0 @@
----
-- name: Setup test VM with Japanese locale and tooling
-  hosts: all
-  become: true
-  gather_facts: true
-  roles:
-    - baseline

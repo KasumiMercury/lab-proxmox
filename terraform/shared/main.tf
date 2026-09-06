@@ -35,8 +35,8 @@ module "proxmox_cloudinit" {
   password_length   = each.value.password_length
   ssh_key           = each.value.ssh_key
 
-  # Optional: attach cloud-init snippet to configure sudo/SSH hardening
-  cicustom = var.cicustom
+  # Optional vendor-data snippet (SSH policy etc.). User-data stays Proxmox-generated.
+  cicustom = var.cloudinit_vendor_snippet == null ? null : "vendor=${var.cloudinit_vendor_snippet}"
 }
 
 output "vm_passwords" {
