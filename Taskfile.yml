@@ -91,6 +91,33 @@ tasks:
     cmds:
       - task: terraform:destroy
 
+  argocd:password:
+    desc: Show the ArgoCD initial admin password (uses ansible/artifacts/<env>.kubeconfig)
+    aliases: [k8s:argocd-password]
+    silent: true
+    vars:
+      KUBECONFIG_FILE: 'ansible/artifacts/{{.TF_ENV}}.kubeconfig'
+    cmds:
+      - |
+        if [ ! -f "{{.KUBECONFIG_FILE}}" ]; then
+          echo "kubeconfig not found: {{.KUBECONFIG_FILE}} (run task ans:run TF_ENV={{.TF_ENV}} first)" >&2
+          exit 1
+        fi
+        PW=$(kubectl --kubeconfig "{{.KUBECONFIG_FILE}}" -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
+        echo "ArgoCD admin password ({{.TF_ENV}}): $PW"
+
+  argocd:port-forward:
+    desc: Port-forward the ArgoCD UI/API to https://localhost:8080 (Ctrl-C to stop)
+    aliases: [k8s:argocd-ui]
+    silent: true
+    vars:
+      KUBECONFIG_FILE: 'ansible/artifacts/{{.TF_ENV}}.kubeconfig'
+      PORT: '{{.PORT | default "8080"}}'
+    cmds:
+      - |
+        echo "ArgoCD UI: https://localhost:{{.PORT}} (user: admin, password: task argocd:password TF_ENV={{.TF_ENV}})"
+        kubectl --kubeconfig "{{.KUBECONFIG_FILE}}" -n argocd port-forward svc/argocd-server {{.PORT}}:443
+
   ssh:agent:
     desc: Load the VM SSH key into an ssh-agent (starts one on a fixed socket if the shell has none)
     aliases: [ssh:key]

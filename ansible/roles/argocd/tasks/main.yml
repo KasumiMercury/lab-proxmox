@@ -1,0 +1,58 @@
+---
+# Runs on the control plane after the cluster (Cilium, workers, dns) is up.
+
+- name: Check whether ArgoCD is already installed
+  ansible.builtin.command: microk8s kubectl -n {{ argocd_namespace }} get deployment argocd-server -o name
+  register: argocd_server_deploy
+  changed_when: false
+  failed_when: false
+  tags: [argocd]
+
+- name: Bootstrap ArgoCD
+  when: argocd_server_deploy.rc != 0
+  tags: [argocd]
+  block:
+    - name: Write the bootstrap Helm values
+      ansible.builtin.copy:
+        content: "{{ argocd_helm_values | to_nice_yaml }}"
+        dest: /var/snap/microk8s/common/argocd-values.yaml
+        mode: "0644"
+
+    - name: Add the Argo Helm repository
+      ansible.builtin.command: microk8s helm3 repo add argo {{ argocd_helm_repo }} --force-update
+      changed_when: false
+
+    - name: Update the Argo Helm repository
+      ansible.builtin.command: microk8s helm3 repo update argo
+      changed_when: false
+
+    - name: Install ArgoCD
+      ansible.builtin.command: >
+        microk8s helm3 install argocd argo/argo-cd
+        --version {{ argocd_chart_version }}
+        --namespace {{ argocd_namespace }} --create-namespace
+        --values /var/snap/microk8s/common/argocd-values.yaml
+
+- name: Wait for the ArgoCD server
+  ansible.builtin.command: microk8s kubectl -n {{ argocd_namespace }} rollout status deployment/argocd-server --timeout={{ argocd_ready_timeout }}s
+  changed_when: false
+  tags: [argocd]
+
+- name: Wait for the ArgoCD application controller
+  ansible.builtin.command: microk8s kubectl -n {{ argocd_namespace }} rollout status statefulset/argocd-application-controller --timeout={{ argocd_ready_timeout }}s
+  changed_when: false
+  tags: [argocd]
+
+- name: Wait for the ArgoCD repo server
+  ansible.builtin.command: microk8s kubectl -n {{ argocd_namespace }} rollout status deployment/argocd-repo-server --timeout={{ argocd_ready_timeout }}s
+  changed_when: false
+  tags: [argocd]
+
+- name: Show how to reach ArgoCD
+  ansible.builtin.debug:
+    msg:
+      - "ArgoCD is running in namespace {{ argocd_namespace }} (chart {{ argocd_chart_version }})."
+      - "Initial admin password: task argocd:password TF_ENV={{ microk8s_cluster_group | default('k8s') }}"
+      - "UI: task argocd:port-forward TF_ENV={{ microk8s_cluster_group | default('k8s') }} -> https://localhost:8080 (user: admin)"
+      - "Apply the root Application manually to hand control over to the ArgoCD repository."
+  tags: [argocd]

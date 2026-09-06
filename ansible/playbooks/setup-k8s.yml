@@ -30,6 +30,12 @@
         name: microk8s
         tasks_from: worker
 
+- name: Install ArgoCD
+  hosts: k8s_control_plane
+  become: true
+  roles:
+    - argocd
+
 - name: Show cluster nodes
   hosts: k8s_control_plane
   become: true

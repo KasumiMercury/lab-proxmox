@@ -1,5 +1,6 @@
 [tools]
 terraform = "1.16.1"
+kubectl = "1.36.4"
 task = "3.53.1"
 jq = "1.8.2"
 lefthook = "2.1.12"
