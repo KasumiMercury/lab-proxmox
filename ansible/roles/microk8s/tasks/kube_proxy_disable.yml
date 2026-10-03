@@ -30,10 +30,17 @@
       changed_when: false
       when: kube_proxy_args.changed
 
+    # `microk8s status --wait-ready` can return before kube-proxy starts, so poll for its exit
     - name: Confirm kubelite stayed up after kube-proxy exited
       ansible.builtin.shell: >
         systemctl is-active snap.microk8s.daemon-kubelite
-        && journalctl -u snap.microk8s.daemon-kubelite --since '-5min' --no-pager | grep -q 'Stopping Proxy'
+        && journalctl -u snap.microk8s.daemon-kubelite --no-pager
+        --since "$(systemctl show -p ActiveEnterTimestamp --value snap.microk8s.daemon-kubelite)"
+        | grep -q 'Stopping Proxy'
+      register: kube_proxy_exit
+      until: kube_proxy_exit.rc == 0
+      retries: 12
+      delay: 5
       changed_when: false
       when: kube_proxy_args.changed
 
