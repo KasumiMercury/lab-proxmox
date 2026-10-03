@@ -42,6 +42,29 @@ Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:dest
 - Re-running the playbook is safe: nodes already in the cluster are not joined again
 - ArgoCD is bootstrapped last (role `argocd`, chart `argo/argo-cd` 10.8.1 = Argo CD v3.5.2) only when it is absent; afterwards it is managed from the ArgoCD repository. The root Application is applied manually for now. `task argocd:password TF_ENV=k8s` prints the initial admin password, `task argocd:port-forward TF_ENV=k8s` exposes the UI at `https://localhost:8080`
 
+### Setup
+Prerequisites:
+- [lab-argo](https://github.com/KasumiMercury/lab-argo): Argo CD reads it from GitHub, not from a local checkout. Clone it next to this repository (`../lab-argo`) with `--recurse-submodules`
+- The NAS export `192.168.110.5:/nfs/k8s` allows the k8s VM subnet `192.168.110.0/24` with `no_root_squash` (backs the `nfs-csi` StorageClass in lab-argo)
+- The VM SSH key is the one in `credentials_vm.ssh_key` (loaded by `ssh:agent`), and the environment variables above are set
+
+Steps (from this repository unless noted):
+1. `git submodule update --init` (checks out `cilium/`; the playbook reads the Cilium pin and values from it)
+2. `task tf:decrypt -- terraform/environments/k8s` (first time / after `*.gpg` changed)
+3. `task tf:plan TF_ENV=k8s`: expect the three VMs and their passwords to be added
+4. `task deploy TF_ENV=k8s`: creates the VMs, generates `ansible/inventory/k8s.ini` and runs `setup-k8s.yml` (MicroK8s, Cilium, worker joins, Argo CD). The kubeconfig lands in `ansible/artifacts/k8s.kubeconfig`
+5. Check the cluster:
+   ```bash
+   export KUBECONFIG=$PWD/ansible/artifacts/k8s.kubeconfig
+   kubectl get nodes -o wide                                  # all three Ready
+   kubectl -n kube-system exec ds/cilium -- cilium-dbg status --brief
+   kubectl -n kube-system exec ds/cilium -- cilium-dbg status | grep KubeProxyReplacement   # True
+   ```
+6. In lab-argo: `kubectl apply -f bootstrap/root.yaml` (the root app-of-apps; lab-argo's Taskfile uses the same kubeconfig by default). Watch with `task argocd:port-forward TF_ENV=k8s` and `task argocd:password TF_ENV=k8s`. The components sync in waves: cilium and argocd (adopted), sealed-secrets and csi-driver-nfs, tailscale, kube-prometheus-stack
+7. In lab-argo, once `sealed-secrets` is Healthy: `task seal:tailscale` and `task seal:grafana`, then commit and push. The Tailscale operator (and everything after it) waits for these Secrets
+
+If a step fails, re-running `task ans:run TF_ENV=k8s` is safe. Cilium and Argo CD are only installed when absent, so a broken first install has to be removed by hand (`microk8s helm3 uninstall ...`) before re-running.
+
 ## Samba (samba environment)
 `task deploy TF_ENV=samba` creates the unprivileged LXC `gnosis` (VMID 101) on yesod and sets up Samba (`ansible/playbooks/setup-samba.yml`, role `samba`).
 - The share `[shared]` is `/mnt/monad`, a storage backed mount point (`mp0`) on `monad`, yesod's local HDD, so the container cannot move to another node
