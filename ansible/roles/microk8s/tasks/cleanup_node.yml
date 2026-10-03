@@ -3,6 +3,7 @@
 # Each node first comes up as a standalone MicroK8s with Calico and kube-proxy, which leaves the vxlan.calico
 # device, Calico routes and iptables rules behind, in both the legacy and the nft tables. A reboot clears them all;
 # the CNI and kube-proxy settings already on disk keep them from coming back.
+# The same reboot also boots a kernel installed by main.yml (microk8s_kernel_package).
 
 - name: Load the shared Cilium values
   ansible.builtin.set_fact:
@@ -25,13 +26,23 @@
   when: microk8s_cni == "cilium"
   tags: [microk8s, cilium, cleanup]
 
-- name: Reboot to clear the leftovers
-  when: microk8s_cni == "cilium" and microk8s_leftovers.stdout | length > 0
-  tags: [microk8s, cilium, cleanup]
+- name: Look for a newer installed kernel than the running one
+  ansible.builtin.shell: |
+    installed=$(readlink -f /boot/vmlinuz | sed 's|.*/vmlinuz-||')
+    [ "$installed" = "$(uname -r)" ] || echo "kernel $(uname -r) -> $installed"
+  register: microk8s_kernel_pending
+  changed_when: false
+  tags: [microk8s, cleanup, kernel]
+
+- name: Reboot to clear the leftovers or boot the new kernel
+  when: >-
+    (microk8s_cni == "cilium" and microk8s_leftovers.stdout | length > 0)
+    or microk8s_kernel_pending.stdout | length > 0
+  tags: [microk8s, cilium, cleanup, kernel]
   block:
     - name: Show what was found
       ansible.builtin.debug:
-        msg: "{{ microk8s_leftovers.stdout_lines }}"
+        msg: "{{ (microk8s_leftovers.stdout_lines | default([])) + microk8s_kernel_pending.stdout_lines }}"
 
     - name: Reboot the node
       ansible.builtin.reboot:

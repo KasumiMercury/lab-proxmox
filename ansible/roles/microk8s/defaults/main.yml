@@ -21,3 +21,8 @@ microk8s_snap_data: /var/snap/microk8s/current
 # also consumed by the ArgoCD repo). Ansible installs Cilium only when it is absent (fresh cluster);
 # every later change is managed by ArgoCD and is out of scope here.
 cilium_config_dir: "{{ playbook_dir }}/../../cilium"
+
+# Kernel package for the nodes. The Ceph cluster (19.2.6+) issues aes256k cephx keys, which the kernel RBD
+# client (ceph-csi krbd) only understands from Linux 7.0; the noble GA kernel is 6.8, the HWE kernel is 7.0.
+# A node running an older kernel than the newest installed one is rebooted by cleanup_node.yml.
+microk8s_kernel_package: linux-generic-hwe-24.04
