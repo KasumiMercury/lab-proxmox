@@ -217,7 +217,8 @@ tasks:
         fi
         echo "Using inventory: {{.ANSIBLE_INVENTORY_FILE}}"
         echo "Using playbook: {{.ANSIBLE_PLAYBOOK}}"
-        ansible-playbook -i {{.ANSIBLE_INVENTORY_FILE}} $OPTS {{.ANSIBLE_PLAYBOOK}}
+        # Extra args after "--" go to ansible-playbook (e.g. -- -e samba_services_enabled=false)
+        ansible-playbook -i {{.ANSIBLE_INVENTORY_FILE}} $OPTS {{.ANSIBLE_PLAYBOOK}} {{.CLI_ARGS}}
     
   ansible:setup:
     desc: Generate inventory and run Ansible setup (complete workflow)
