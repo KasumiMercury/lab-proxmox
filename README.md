@@ -41,7 +41,7 @@ Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:dest
 - Per-VM options in `virtual_machines` (`<env>.auto.tfvars`): `cores`, `cpu_type` (default `x86-64-v2-AES`; `host` exposes the full CPU), `memory`, `disk_size`, `disk_storage`, `network_bridge`, `network_tag`, `role`
 - The kubeconfig is fetched to `ansible/artifacts/k8s.kubeconfig` (gitignored): `export KUBECONFIG=$PWD/ansible/artifacts/k8s.kubeconfig && kubectl get nodes`
 - Re-running the playbook is safe: nodes already in the cluster are not joined again
-- ArgoCD is bootstrapped last (role `argocd`, chart `argo/argo-cd` 10.8.1 = Argo CD v3.5.2) only when it is absent; afterwards it is managed from the ArgoCD repository. The root Application is applied manually for now. `task argocd:password TF_ENV=k8s` prints the initial admin password, `task argocd:port-forward TF_ENV=k8s` exposes the UI at `https://localhost:8080`
+- ArgoCD is bootstrapped last (role `argocd`, chart `argo/argo-cd` 10.8.1 = Argo CD v3.5.2) only when it is absent; afterwards it is managed from the ArgoCD repository. The root Application is applied with `task bootstrap` in the ArgoCD repository. `task argocd:password TF_ENV=k8s` prints the initial admin password, `task argocd:port-forward TF_ENV=k8s` exposes the UI at `http://localhost:8080`. On the tailnet it is at `https://argocd.<tailnet>.ts.net` (Tailscale Ingress in the ArgoCD repository, which terminates TLS; argocd-server runs with `server.insecure`)
 
 ### Setup
 Prerequisites:
