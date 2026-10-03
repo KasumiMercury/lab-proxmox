@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+# Reached only through "tailscale serve" (HTTPS terminated by Tailscale, proxied from 127.0.0.1)
+<VirtualHost 127.0.0.1:80>
+    ServerName {{ nextcloud_domain }}
+    DocumentRoot {{ nextcloud_webroot }}
+
+    <Directory {{ nextcloud_webroot }}>
+        Require all granted
+        AllowOverride All
+        Options FollowSymLinks MultiViews
+        CGIPassAuth On
+
+        <IfModule mod_dav.c>
+            Dav off
+        </IfModule>
+    </Directory>
+
+    # Client address from tailscale serve
+    RemoteIPHeader X-Forwarded-For
+    RemoteIPInternalProxy 127.0.0.1
+
+    # Upload size is limited by PHP (chunked uploads), not by Apache
+    LimitRequestBody 0
+
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+    ErrorLog ${APACHE_LOG_DIR}/nextcloud-error.log
+    CustomLog ${APACHE_LOG_DIR}/nextcloud-access.log combined
+</VirtualHost>

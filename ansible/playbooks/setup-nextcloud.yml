@@ -1,0 +1,13 @@
+---
+# Baseline, then Nextcloud (hosts in [nextcloud_nextcloud], from the container "role"
+# in terraform/environments/nextcloud/nextcloud.auto.tfvars).
+# Before cutover run with -e nextcloud_services_enabled=false so tailscaled stays stopped
+# while the old athanor still holds the Tailscale node.
+
+- import_playbook: setup.yml
+
+- name: Setup Nextcloud
+  hosts: nextcloud_nextcloud
+  become: true
+  roles:
+    - nextcloud

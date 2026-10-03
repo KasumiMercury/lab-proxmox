@@ -1,0 +1,25 @@
+---
+- name: restart php-fpm
+  ansible.builtin.systemd:
+    name: "php{{ nextcloud_php_version }}-fpm"
+    state: restarted
+
+- name: reload apache
+  ansible.builtin.systemd:
+    name: apache2
+    state: reloaded
+
+- name: restart apache
+  ansible.builtin.systemd:
+    name: apache2
+    state: restarted
+
+- name: restart tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: restarted
+  when: nextcloud_services_enabled | bool
+
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
