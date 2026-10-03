@@ -1,4 +1,7 @@
 locals {
+  # Environment name = directory of the root module (terraform/environments/<env>)
+  environment = basename(abspath(path.root))
+
   vm_configurations = {
     for vm_key, vm_instance in var.virtual_machines :
     vm_key => merge(
@@ -40,6 +43,7 @@ module "proxmox_cloudinit" {
   username          = each.value.username
   password_length   = each.value.password_length
   ssh_key           = each.value.ssh_key
+  tags              = compact([local.environment, each.value.role, "terraform"])
 
   # Optional vendor-data snippet (SSH policy etc.). User-data stays Proxmox-generated.
   cicustom = var.cloudinit_vendor_snippet == null ? null : "vendor=${var.cloudinit_vendor_snippet}"

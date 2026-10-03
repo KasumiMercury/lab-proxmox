@@ -153,3 +153,9 @@ variable "cicustom" {
   type        = string
   default     = null
 }
+
+variable "tags" {
+  description = "Proxmox tags (lowercase letters, digits, '-', '_', '+', '.'). Stored sorted and ';'-separated"
+  type        = list(string)
+  default     = []
+}
