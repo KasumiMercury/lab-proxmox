@@ -17,6 +17,10 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
   agent = 0
 
   memory = var.memory
+  # Keep the balloon device (minimum = memory, so it never shrinks the guest): Proxmox reads the guest's
+  # own memory usage through it and free page reporting hands freed pages back to the host.
+  # Without it (balloon = 0) Proxmox shows the QEMU RSS, which stays at the full allocation.
+  balloon = var.memory
 
   ipconfig0 = "ip=${var.ip_address}/${var.ip_prefix_length},gw=${var.gateway},ip6=dhcp"
 
