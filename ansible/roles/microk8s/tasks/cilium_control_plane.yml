@@ -8,8 +8,35 @@
   register: microk8s_calico_manifest
   tags: [microk8s, cilium]
 
+# Not waiting here: the deletion can stall on the Calico pods and CRDs, which are cleared below
 - name: Remove Calico from the cluster
-  ansible.builtin.command: microk8s kubectl delete --ignore-not-found -f {{ microk8s_snap_data }}/args/cni-network/cni.yaml
+  ansible.builtin.command: microk8s kubectl delete --ignore-not-found --wait=false -f {{ microk8s_snap_data }}/args/cni-network/cni.yaml
+  when: microk8s_calico_manifest.stat.exists
+  tags: [microk8s, cilium]
+
+# Their network teardown runs the Calico CNI plugin, whose ServiceAccount was just deleted (Unauthorized)
+- name: Force-delete the remaining Calico pods
+  ansible.builtin.command: >
+    microk8s kubectl -n kube-system delete pod --ignore-not-found --force --grace-period=0
+    -l 'k8s-app in (calico-node, calico-kube-controllers)'
+  when: microk8s_calico_manifest.stat.exists
+  changed_when: false
+  tags: [microk8s, cilium]
+
+# The CRD cleanup can stall ("could not list instances: storage is (re)initializing") and keep its finalizer
+# forever. Calico's custom resources are discarded with it, so drop the finalizer of any CRD still left.
+- name: Wait for the Calico CRDs to go away
+  ansible.builtin.shell: |
+    for i in $(seq 30); do
+      crds=$(microk8s kubectl get crd -o name | grep '\.projectcalico\.org$' || true)
+      [ -z "$crds" ] && exit 0
+      sleep 2
+    done
+    for crd in $crds; do
+      microk8s kubectl patch "$crd" --type=merge -p '{"metadata":{"finalizers":[]}}'
+    done
+  register: microk8s_calico_crds
+  changed_when: microk8s_calico_crds.stdout | length > 0
   when: microk8s_calico_manifest.stat.exists
   tags: [microk8s, cilium]
 
