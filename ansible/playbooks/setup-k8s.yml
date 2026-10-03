@@ -30,6 +30,16 @@
         name: microk8s
         tasks_from: worker
 
+- name: Clear what Calico and kube-proxy left on the nodes
+  hosts: k8s
+  become: true
+  serial: 1
+  tasks:
+    - name: Clean up this node
+      ansible.builtin.include_role:
+        name: microk8s
+        tasks_from: cleanup_node
+
 - name: Install ArgoCD
   hosts: k8s_control_plane
   become: true

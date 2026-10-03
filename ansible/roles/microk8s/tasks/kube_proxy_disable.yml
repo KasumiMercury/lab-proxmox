@@ -2,7 +2,7 @@
 # Disable MicroK8s' kube-proxy when the shared Cilium values enable kubeProxyReplacement.
 # kube-proxy runs inside kubelite and has no off switch, so it is started with --init-only: it applies the
 # node sysctls it normally sets, programs no rules and returns cleanly, and kubelite keeps running without it.
-# Rules left by the initial (normal) kube-proxy run are removed once, as in the Cilium kube-proxy-free guide.
+# Rules left by the initial (normal) kube-proxy run are cleared by the reboot in cleanup_node.yml.
 # Applied on every node; re-applied on workers after `microk8s join` because the join rewrites the args file.
 
 - name: Load the shared Cilium values
@@ -42,12 +42,6 @@
       retries: 12
       delay: 5
       changed_when: false
-      when: kube_proxy_args.changed
-
-    - name: Remove the rules left behind by the initial kube-proxy run
-      ansible.builtin.shell: |
-        {{ item }}-save | grep -v KUBE | {{ item }}-restore
-      loop: [iptables, ip6tables]
       when: kube_proxy_args.changed
   rescue:
     - name: Roll back the kube-proxy change
