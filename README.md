@@ -61,7 +61,7 @@ Steps (from this repository unless noted):
    kubectl -n kube-system exec ds/cilium -- cilium-dbg status --brief
    kubectl -n kube-system exec ds/cilium -- cilium-dbg status | grep KubeProxyReplacement   # True
    ```
-6. In lab-argo: `kubectl apply -f bootstrap/root.yaml` (the root app-of-apps; lab-argo's Taskfile uses the same kubeconfig by default). Watch with `task argocd:port-forward TF_ENV=k8s` and `task argocd:password TF_ENV=k8s`. The components sync in waves: cilium and argocd (adopted), sealed-secrets and csi-driver-nfs, tailscale, kube-prometheus-stack
+6. In lab-argo: `task bootstrap` (applies the root app-of-apps `bootstrap/root.yaml`; lab-argo's Taskfile uses the same kubeconfig by default). Watch with `task argocd:port-forward TF_ENV=k8s` and `task argocd:password TF_ENV=k8s`. The components sync in waves: cilium and argocd (adopted), sealed-secrets and csi-driver-nfs, tailscale, kube-prometheus-stack
 7. In lab-argo, once `sealed-secrets` is Healthy: `task seal:tailscale` and `task seal:grafana`, then commit and push. The Tailscale operator (and everything after it) waits for these Secrets
 
 If a step fails, re-running `task ans:run TF_ENV=k8s` is safe. Cilium and Argo CD are only installed when absent, so a broken first install has to be removed by hand (`microk8s helm3 uninstall ...`) before re-running.
