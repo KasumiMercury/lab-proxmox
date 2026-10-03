@@ -11,6 +11,9 @@ argocd_chart_version: "10.8.1"
 # for each component on the very first sync. Keep it identical to platform/argocd/values.yaml in lab-argo.
 argocd_helm_values:
   configs:
+    params:
+      # TLS is terminated in front of argocd-server (Tailscale Ingress in the ArgoCD repo), so it serves plain HTTP
+      server.insecure: true
     cm:
       # https://argo-cd.readthedocs.io/en/stable/operator-manual/health/#argocd-app
       resource.customizations.health.argoproj.io_Application: |
