@@ -1,0 +1,17 @@
+---
+# Owner of the share; uid/gid match the files migrated from the gnosis VM
+samba_user: mercury
+samba_uid: 1000
+samba_gid: 1000
+
+samba_share_name: shared
+samba_share_path: /mnt/monad
+
+# false = install and configure only, keep smbd/nmbd/wsdd2 stopped
+# (used while the old server still announces the same NetBIOS name)
+samba_services_enabled: true
+
+# passdb.tdb / secrets.tdb taken from the old server (gitignored). Copied when present,
+# so the existing Samba passwords keep working. Both are needed: user SIDs in passdb.tdb
+# belong to the machine SID stored in secrets.tdb.
+samba_tdb_src_dir: "{{ playbook_dir }}/../artifacts/samba"
