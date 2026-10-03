@@ -39,6 +39,8 @@ Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:dest
 - Cilium chart pin and values live in `cilium/` (`version.yaml`, `values.yaml`), a git submodule of [lab-cilium](https://github.com/KasumiMercury/lab-cilium) shared with the ArgoCD repo; run `git submodule update --init` after cloning. See `cilium/README.md` for the contract
 - Node-to-node ports: 16443 (API), 25000 (join), 10250 (kubelet), 8472/udp (Cilium VXLAN), 4240 (Cilium health). The VMs' NICs have the Proxmox firewall flag set, so keep the VM firewall disabled or allow these
 - Control plane VM has 8192 MB (`memory` in `k8s.auto.tfvars`), workers 4096 MB
+- The VMs use the CPU type `x86-64-v3` (supported by all three hosts); some images (ceph-csi 3.18) need it
+- The nodes run the noble HWE kernel (`microk8s_kernel_package`, 7.0): Ceph 19.2.6+ issues aes256k cephx keys, which the kernel RBD client only supports from Linux 7.0. A node is rebooted (one at a time, after the workers joined) when a newer kernel is installed than the one running
 - Per-VM options in `virtual_machines` (`<env>.auto.tfvars`): `cores`, `cpu_type` (default `x86-64-v2-AES`; `host` exposes the full CPU), `memory`, `disk_size`, `disk_storage`, `network_bridge`, `network_tag`, `role`
 - The kubeconfig is fetched to `ansible/artifacts/k8s.kubeconfig` (gitignored): `export KUBECONFIG=$PWD/ansible/artifacts/k8s.kubeconfig && kubectl get nodes`
 - Re-running the playbook is safe: nodes already in the cluster are not joined again

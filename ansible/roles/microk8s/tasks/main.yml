@@ -1,6 +1,13 @@
 ---
 # Runs on every cluster node: install MicroK8s and make nodes resolvable by name.
 
+- name: Install the node kernel
+  ansible.builtin.apt:
+    name: "{{ microk8s_kernel_package }}"
+    state: present
+  when: microk8s_kernel_package | length > 0
+  tags: [microk8s, packages, kernel]
+
 - name: Ensure snapd is installed
   ansible.builtin.apt:
     name: snapd
