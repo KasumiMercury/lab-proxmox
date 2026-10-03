@@ -21,12 +21,19 @@
     append: true
   tags: [microk8s]
 
+# cloud-init (manage_etc_hosts: true in the Proxmox user-data) rebuilds /etc/hosts from the template on
+# every boot, so the same block goes into the template to survive reboots
 - name: Register every cluster node in /etc/hosts
-  ansible.builtin.lineinfile:
-    path: /etc/hosts
-    regexp: '\s{{ item }}$'
-    line: "{{ hostvars[item].ansible_host }} {{ item }}"
-  loop: "{{ groups[microk8s_cluster_group] }}"
+  ansible.builtin.blockinfile:
+    path: "{{ item }}"
+    marker: "# {mark} MicroK8s cluster nodes (Ansible managed)"
+    block: |
+      {% for host in groups[microk8s_cluster_group] %}
+      {{ hostvars[host].ansible_host }} {{ host }}
+      {% endfor %}
+  loop:
+    - /etc/hosts
+    - /etc/cloud/templates/hosts.debian.tmpl
   tags: [microk8s, hosts]
 
 - name: Wait for MicroK8s to be ready on this node
