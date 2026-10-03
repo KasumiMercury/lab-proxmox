@@ -1,0 +1,353 @@
+---
+# Native Nextcloud stack replacing the Docker Compose one on the athanor VM:
+#   tailscale serve (HTTPS:443) -> Apache (127.0.0.1:80) -> PHP-FPM -> PostgreSQL
+# The Nextcloud tree itself (code, config, apps, data) is migrated with rsync, not installed here.
+
+# python3-debian: deb822_repository / acl: become_user www-data for occ
+- name: Install Ansible module dependencies
+  ansible.builtin.apt:
+    name: [python3-debian, acl]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [packages]
+
+- name: Add PostgreSQL (PGDG) and Tailscale apt repositories
+  ansible.builtin.deb822_repository:
+    name: "{{ item.name }}"
+    uris: "{{ item.uris }}"
+    suites: "{{ item.suites }}"
+    components: main
+    signed_by: "{{ item.key }}"
+  loop:
+    - name: pgdg
+      uris: https://apt.postgresql.org/pub/repos/apt
+      suites: "{{ ansible_distribution_release }}-pgdg"
+      key: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    - name: tailscale
+      uris: https://pkgs.tailscale.com/stable/ubuntu
+      suites: "{{ ansible_distribution_release }}"
+      key: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"
+  loop_control:
+    label: "{{ item.name }}"
+  register: nextcloud_repos
+  tags: [packages]
+
+- name: Install Apache, PHP, PostgreSQL and Tailscale
+  ansible.builtin.apt:
+    name:
+      - apache2
+      - "php{{ nextcloud_php_version }}-fpm"
+      - "php{{ nextcloud_php_version }}-cli"
+      - "php{{ nextcloud_php_version }}-apcu"
+      - "php{{ nextcloud_php_version }}-bcmath"
+      - "php{{ nextcloud_php_version }}-curl"
+      - "php{{ nextcloud_php_version }}-gd"
+      - "php{{ nextcloud_php_version }}-gmp"
+      - "php{{ nextcloud_php_version }}-imagick"
+      - "php{{ nextcloud_php_version }}-intl"
+      - "php{{ nextcloud_php_version }}-mbstring"
+      - "php{{ nextcloud_php_version }}-opcache"
+      - "php{{ nextcloud_php_version }}-pgsql"
+      - "php{{ nextcloud_php_version }}-xml"
+      - "php{{ nextcloud_php_version }}-zip"
+      - libmagickcore-6.q16-7-extra
+      - "postgresql-{{ nextcloud_pg_version }}"
+      - python3-psycopg2
+      - tailscale
+      - rsync
+    state: present
+    update_cache: true
+    # Refresh right away when a repository was just added
+    cache_valid_time: "{{ 0 if nextcloud_repos is changed else 3600 }}"
+  tags: [packages]
+
+# --- Nextcloud tree -------------------------------------------------------
+
+- name: Create Nextcloud directory on the data volume
+  ansible.builtin.file:
+    path: "{{ nextcloud_volume_dir }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0755"
+  tags: [mount]
+
+- name: Bind mount the Nextcloud directory to the web root
+  ansible.posix.mount:
+    src: "{{ nextcloud_volume_dir }}"
+    path: "{{ nextcloud_webroot }}"
+    fstype: none
+    opts: bind
+    state: mounted
+  tags: [mount]
+
+# --- PHP ------------------------------------------------------------------
+
+- name: Deploy PHP settings for Nextcloud
+  ansible.builtin.template:
+    src: php-nextcloud.ini.j2
+    dest: "/etc/php/{{ nextcloud_php_version }}/{{ item }}/conf.d/90-nextcloud.ini"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [fpm, cli]
+  notify: restart php-fpm
+  tags: [php]
+
+- name: Deploy PHP-FPM pool
+  ansible.builtin.template:
+    src: php-fpm-www.conf.j2
+    dest: "/etc/php/{{ nextcloud_php_version }}/fpm/pool.d/www.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart php-fpm
+  tags: [php]
+
+- name: Start PHP-FPM
+  ansible.builtin.systemd:
+    name: "php{{ nextcloud_php_version }}-fpm"
+    enabled: true
+    state: started
+  tags: [php]
+
+# --- Apache ---------------------------------------------------------------
+
+- name: Listen on localhost only (reached through tailscale serve)
+  ansible.builtin.lineinfile:
+    path: /etc/apache2/ports.conf
+    regexp: '^Listen 80$|^Listen 127\.0\.0\.1:80$'
+    line: Listen 127.0.0.1:80
+  notify: restart apache
+  tags: [apache]
+
+- name: Switch Apache to mpm_event
+  ansible.builtin.command: a2dismod mpm_prefork
+  register: nextcloud_a2dismod
+  changed_when: "'already disabled' not in nextcloud_a2dismod.stdout"
+  notify: restart apache
+  tags: [apache]
+
+- name: Enable Apache modules
+  community.general.apache2_module:
+    name: "{{ item }}"
+    state: present
+  loop: [mpm_event, proxy_fcgi, setenvif, rewrite, headers, env, dir, mime, remoteip]
+  notify: restart apache
+  tags: [apache]
+
+- name: Enable the PHP-FPM handler config
+  ansible.builtin.command: "a2enconf php{{ nextcloud_php_version }}-fpm"
+  register: nextcloud_a2enconf
+  changed_when: "'already enabled' not in nextcloud_a2enconf.stdout"
+  notify: reload apache
+  tags: [apache]
+
+- name: Deploy Nextcloud site
+  ansible.builtin.template:
+    src: apache-nextcloud.conf.j2
+    dest: /etc/apache2/sites-available/nextcloud.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload apache
+  tags: [apache]
+
+- name: Enable Nextcloud site, disable the default one
+  ansible.builtin.file:
+    path: "/etc/apache2/sites-enabled/{{ item.name }}"
+    src: "{{ omit if item.state == 'absent' else '../sites-available/' + item.name }}"
+    state: "{{ item.state }}"
+  loop:
+    - { name: nextcloud.conf, state: link }
+    - { name: 000-default.conf, state: absent }
+  notify: reload apache
+  tags: [apache]
+
+- name: Start Apache
+  ansible.builtin.systemd:
+    name: apache2
+    enabled: true
+    state: started
+  tags: [apache]
+
+# --- PostgreSQL -----------------------------------------------------------
+
+- name: Start PostgreSQL
+  ansible.builtin.systemd:
+    name: postgresql
+    enabled: true
+    state: started
+  tags: [db]
+
+- name: Check for the migrated Nextcloud config
+  ansible.builtin.stat:
+    path: "{{ nextcloud_webroot }}/config/config.php"
+  register: nextcloud_config
+  tags: [db, config]
+
+# The database password is kept in config.php (migrated from the old server)
+- name: Read the database password from config.php
+  ansible.builtin.command:
+    argv: [php, -r, 'include $argv[1]; echo $CONFIG["dbpassword"];', --, "{{ nextcloud_webroot }}/config/config.php"]
+  register: nextcloud_dbpassword
+  changed_when: false
+  no_log: true
+  when: nextcloud_config.stat.exists
+  tags: [db]
+
+- name: Create database user
+  community.postgresql.postgresql_user:
+    name: "{{ nextcloud_db_user }}"
+    password: "{{ nextcloud_dbpassword.stdout if nextcloud_config.stat.exists else omit }}"
+  become: true
+  become_user: postgres
+  no_log: true
+  tags: [db]
+
+- name: Create database
+  community.postgresql.postgresql_db:
+    name: "{{ nextcloud_db_name }}"
+    owner: "{{ nextcloud_db_user }}"
+    # The LXC template has no locale at install time, so the cluster defaults to SQL_ASCII
+    encoding: UTF8
+    lc_collate: C.UTF-8
+    lc_ctype: C.UTF-8
+    template: template0
+  become: true
+  become_user: postgres
+  tags: [db]
+
+# --- Nextcloud config -----------------------------------------------------
+
+- name: Point Nextcloud at the local database
+  ansible.builtin.lineinfile:
+    path: "{{ nextcloud_webroot }}/config/config.php"
+    regexp: "^(\\s*)'dbhost' =>"
+    line: "\\1'dbhost' => 'localhost',"
+    backrefs: true
+  when: nextcloud_config.stat.exists
+  tags: [config]
+
+- name: Check Nextcloud status
+  ansible.builtin.command: php occ status --output=json
+  args:
+    chdir: "{{ nextcloud_webroot }}"
+  become: true
+  become_user: www-data
+  register: nextcloud_status
+  changed_when: false
+  failed_when: false
+  when: nextcloud_config.stat.exists
+  tags: [config]
+
+# Reverse proxy settings (replace TRUSTED_PROXIES / OVERWRITEPROTOCOL of the Docker image) and the maintenance window
+- name: Set Nextcloud system config
+  ansible.builtin.command:
+    argv: "{{ ['php', 'occ', 'config:system:set'] + item.key + ['--value', item.value | string, '--type', item.type | default('string')] }}"
+    chdir: "{{ nextcloud_webroot }}"
+  become: true
+  become_user: www-data
+  loop:
+    - { key: [trusted_proxies, "0"], value: 127.0.0.1 }
+    - { key: [overwriteprotocol], value: https }
+    - { key: [overwrite.cli.url], value: "https://{{ nextcloud_domain }}" }
+    - { key: [maintenance_window_start], value: "{{ nextcloud_maintenance_window_start }}", type: integer }
+  loop_control:
+    label: "{{ item.key | join(' ') }}"
+  changed_when: false
+  when: (nextcloud_status.stdout | default('{}') | from_json).installed | default(false)
+  tags: [config]
+
+# --- Background jobs ------------------------------------------------------
+
+- name: Deploy Nextcloud cron units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [nextcloud-cron.service, nextcloud-cron.timer]
+  notify: reload systemd
+  tags: [cron]
+
+- name: Flush handlers before starting units
+  ansible.builtin.meta: flush_handlers
+  tags: [cron, tailscale]
+
+- name: Use system cron for background jobs
+  ansible.builtin.command:
+    argv: [php, occ, background:cron]
+    chdir: "{{ nextcloud_webroot }}"
+  become: true
+  become_user: www-data
+  changed_when: false
+  when:
+    - nextcloud_services_enabled | bool
+    - (nextcloud_status.stdout | default('{}') | from_json).installed | default(false)
+  tags: [cron]
+
+- name: Set Nextcloud cron timer state
+  ansible.builtin.systemd:
+    name: nextcloud-cron.timer
+    enabled: "{{ nextcloud_services_enabled | bool }}"
+    state: "{{ 'started' if nextcloud_services_enabled | bool else 'stopped' }}"
+  tags: [cron]
+
+# --- Tailscale ------------------------------------------------------------
+
+# Unprivileged container without /dev/net/tun, same mode as the old tailscale container
+- name: Run tailscaled with userspace networking
+  ansible.builtin.lineinfile:
+    path: /etc/default/tailscaled
+    regexp: "^FLAGS="
+    line: 'FLAGS="--tun=userspace-networking"'
+  notify: restart tailscaled
+  tags: [tailscale]
+
+- name: Set tailscaled service state
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: "{{ nextcloud_services_enabled | bool }}"
+    state: "{{ 'started' if nextcloud_services_enabled | bool else 'stopped' }}"
+  tags: [tailscale]
+
+- name: Check Tailscale login state
+  ansible.builtin.command: tailscale status --json
+  register: nextcloud_ts_status
+  changed_when: false
+  failed_when: false
+  # tailscaled needs a few seconds after (re)start to reach the control server
+  until: (nextcloud_ts_status.stdout | default('{}') | from_json).BackendState | default('') in ['Running', 'NeedsLogin']
+  retries: 10
+  delay: 3
+  when: nextcloud_services_enabled | bool
+  tags: [tailscale]
+
+- name: Check tailscale serve config
+  ansible.builtin.command: tailscale serve status --json
+  register: nextcloud_ts_serve
+  changed_when: false
+  when:
+    - nextcloud_services_enabled | bool
+    - (nextcloud_ts_status.stdout | default('{}') | from_json).BackendState | default('') == 'Running'
+  tags: [tailscale]
+
+- name: Serve Nextcloud over HTTPS on the tailnet
+  ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:80
+  when:
+    - nextcloud_ts_serve is not skipped
+    - (nextcloud_ts_serve.stdout | default('{}') | from_json).Web | default({}) | length == 0
+  tags: [tailscale]
+
+- name: Warn when Tailscale is not logged in
+  ansible.builtin.debug:
+    msg: >-
+      tailscaled is not logged in. Copy the old node state to /var/lib/tailscale/tailscaled.state
+      (or run "tailscale up --advertise-tags=tag:container") and rerun this role.
+  when:
+    - nextcloud_services_enabled | bool
+    - (nextcloud_ts_status.stdout | default('{}') | from_json).BackendState | default('') != 'Running'
+  tags: [tailscale]

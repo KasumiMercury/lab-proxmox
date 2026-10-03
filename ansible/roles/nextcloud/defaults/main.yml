@@ -1,0 +1,26 @@
+---
+# Nextcloud tree (code, config, apps, data) on the mp0 volume, bind mounted to the web root.
+# The web root stays /var/www/html as in the Docker image: datadirectory and the
+# storage ids in the database ("local::/var/www/html/data/") depend on that path.
+nextcloud_volume_dir: /mnt/monad/nextcloud
+nextcloud_webroot: /var/www/html
+
+# Public URL, served by "tailscale serve" (HTTPS terminated by Tailscale)
+nextcloud_domain: athanor.tail4a681d.ts.net
+
+# Hour (UTC) when heavy daily background jobs may start; 19 = 04:00 JST
+nextcloud_maintenance_window_start: 19
+
+nextcloud_php_version: "8.3"
+nextcloud_php_memory_limit: 512M
+nextcloud_php_upload_limit: 512M
+
+# PostgreSQL from the PGDG repository; the major version matches the old postgres container
+nextcloud_pg_version: 18
+nextcloud_db_name: nextcloud
+# dbuser in config.php (created by the Nextcloud installer; owns every table)
+nextcloud_db_user: oc_admin
+
+# false = install and configure only, keep tailscaled and the cron timer stopped
+# (used while the old athanor still holds the same Tailscale node)
+nextcloud_services_enabled: true
