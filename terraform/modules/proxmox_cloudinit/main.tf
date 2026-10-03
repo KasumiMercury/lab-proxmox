@@ -22,6 +22,9 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
   # Without it (balloon = 0) Proxmox shows the QEMU RSS, which stays at the full allocation.
   balloon = var.memory
 
+  # Without tags the provider writes " ", which never matches the config and shows up in every plan
+  tags = length(var.tags) > 0 ? join(";", sort(distinct(var.tags))) : null
+
   ipconfig0 = "ip=${var.ip_address}/${var.ip_prefix_length},gw=${var.gateway},ip6=dhcp"
 
   nameserver = var.nameserver

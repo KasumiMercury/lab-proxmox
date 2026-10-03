@@ -79,6 +79,7 @@ If a step fails, re-running `task ans:run TF_ENV=k8s` is safe. Cilium and Argo C
 ## Terraform Layout
 - `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
 - `terraform/environments/<env>/`: symlinks to `shared/*.tf` plus `<env>.auto.tfvars`, `<env>_credential.auto.tfvars.json(.gpg)`, `.terraform.lock.hcl`
+- VMs get the Proxmox tags `<env>` (directory name), their `role` (if set) and `terraform`
 - State key is set at init: `terraform init -backend-config="key=proxmox/<env>/terraform.tfstate"` (`task terraform:init` does this)
 - Backend is Cloudflare R2 (S3-compatible); endpoint and credentials come from `AWS_*` env vars
 - To add an environment: create the directory, symlink the four `shared/*.tf` files, add tfvars. On Windows enable `git config core.symlinks true` before checkout
