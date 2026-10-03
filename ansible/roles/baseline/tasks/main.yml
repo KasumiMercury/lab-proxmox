@@ -3,6 +3,8 @@
   ansible.builtin.wait_for:
     path: /var/lib/cloud/instance/boot-finished
     timeout: 300
+  # LXC templates do not ship cloud-init
+  when: ansible_virtualization_type != 'lxc'
   tags: [wait]
 
 - name: Update package cache
