@@ -7,6 +7,24 @@ argocd_helm_repo: https://argoproj.github.io/argo-helm
 argocd_chart_version: "10.8.1"
 # Helm values passed at bootstrap (kept minimal; day-2 settings belong to the ArgoCD repo).
 # Self-management later requires the ServerSideApply=true sync option on the ArgoCD Application.
-argocd_helm_values: {}
+# The Application health check is set here too, so the sync waves of the root app-of-apps already wait
+# for each component on the very first sync. Keep it identical to platform/argocd/values.yaml in lab-argo.
+argocd_helm_values:
+  configs:
+    cm:
+      # https://argo-cd.readthedocs.io/en/stable/operator-manual/health/#argocd-app
+      resource.customizations.health.argoproj.io_Application: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
+            end
+          end
+        end
+        return hs
 # Seconds to wait for the ArgoCD components to roll out
 argocd_ready_timeout: 600
