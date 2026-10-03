@@ -60,6 +60,14 @@
       ansible.builtin.set_fact:
         cilium_chart_pin: "{{ lookup('ansible.builtin.file', cilium_config_dir ~ '/version.yaml') | from_yaml }}"
         cilium_values: "{{ lookup('ansible.builtin.file', cilium_config_dir ~ '/values.yaml') | from_yaml }}"
+        cilium_gateway_api_pin: "{{ lookup('ansible.builtin.file', cilium_config_dir ~ '/gateway-api.yaml') | from_yaml }}"
+
+    # The Cilium operator only enables Gateway API support when the CRDs exist at startup
+    - name: Install the Gateway API CRDs
+      ansible.builtin.command: >
+        microk8s kubectl apply --server-side
+        -f {{ cilium_gateway_api_pin.repo }}/releases/download/{{ cilium_gateway_api_pin.version }}/standard-install.yaml
+      when: cilium_values.gatewayAPI.enabled | default(false) | bool
 
     - name: Detect the pod CIDR configured for kube-proxy
       ansible.builtin.shell: grep -oE -- '--cluster-cidr=\S+' {{ microk8s_snap_data }}/args/kube-proxy | cut -d= -f2
