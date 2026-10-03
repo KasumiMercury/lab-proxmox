@@ -17,7 +17,7 @@ virtual_machines = {
   }
   "netzach" = {
     target_node    = "netzach"
-    vmid           = 829
+    vmid           = 820
     vm_name        = "k8s-netzach"
     role           = "worker"
     cores          = 2
@@ -28,7 +28,7 @@ virtual_machines = {
   }
   "yesod" = {
     target_node    = "yesod"
-    vmid           = 839
+    vmid           = 830
     vm_name        = "k8s-yesod"
     role           = "worker"
     cores          = 2
