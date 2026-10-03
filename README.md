@@ -42,6 +42,16 @@ Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:dest
 - Re-running the playbook is safe: nodes already in the cluster are not joined again
 - ArgoCD is bootstrapped last (role `argocd`, chart `argo/argo-cd` 10.8.1 = Argo CD v3.5.2) only when it is absent; afterwards it is managed from the ArgoCD repository. The root Application is applied manually for now. `task argocd:password TF_ENV=k8s` prints the initial admin password, `task argocd:port-forward TF_ENV=k8s` exposes the UI at `https://localhost:8080`
 
+## Samba (samba environment)
+`task deploy TF_ENV=samba` creates the unprivileged LXC `gnosis` (VMID 101) on yesod and sets up Samba (`ansible/playbooks/setup-samba.yml`, role `samba`).
+- The share `[shared]` is `/mnt/monad`, a storage backed mount point (`mp0`) on `monad`, yesod's local HDD, so the container cannot move to another node
+- Containers are declared in `containers` (`<env>.auto.tfvars`) with credentials in `credentials_ct` (`<env>_credential.auto.tfvars.json`). They log in as `root` with the keys in `ssh_key`
+- Destroying a container deletes every volume it owns, share data included. The LXC module sets `prevent_destroy` and the Proxmox `protection` flag; remove both on purpose before tearing one down
+- `ostemplate`, `password` and `ssh_public_keys` are only applied at creation (later changes are ignored)
+- Mount points are excluded from vzdump backups unless `backup = true` is set in `mountpoints`
+- Samba passwords and the machine SID come from `passdb.tdb` / `secrets.tdb` of the old server, placed in `ansible/artifacts/samba/` (gitignored). The role copies them when present
+- `task ans:run TF_ENV=samba -- -e samba_services_enabled=false` configures everything but keeps smbd/nmbd/wsdd2 stopped (used while the old server is still up). Arguments after `--` go to `ansible-playbook`
+
 ## Terraform Layout
 - `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
 - `terraform/environments/<env>/`: symlinks to `shared/*.tf` plus `<env>.auto.tfvars`, `<env>_credential.auto.tfvars.json(.gpg)`, `.terraform.lock.hcl`

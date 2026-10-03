@@ -1,0 +1,78 @@
+---
+- name: Install Samba, WS-Discovery and rsync
+  ansible.builtin.apt:
+    name:
+      - samba
+      - wsdd2
+      - rsync
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: [packages]
+
+- name: Create share owner group
+  ansible.builtin.group:
+    name: "{{ samba_user }}"
+    gid: "{{ samba_gid }}"
+  tags: [user]
+
+- name: Create share owner user
+  ansible.builtin.user:
+    name: "{{ samba_user }}"
+    uid: "{{ samba_uid }}"
+    group: "{{ samba_user }}"
+    shell: /bin/bash
+  tags: [user]
+
+- name: Deploy smb.conf
+  ansible.builtin.template:
+    src: smb.conf.j2
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: testparm -s %s
+  notify: restart samba
+  tags: [config]
+
+- name: Check for Samba databases from the old server
+  ansible.builtin.stat:
+    path: "{{ samba_tdb_src_dir }}/{{ item }}"
+  loop: [passdb.tdb, secrets.tdb]
+  register: samba_tdb_src
+  delegate_to: localhost
+  become: false
+  tags: [passdb]
+
+- name: Copy Samba databases (passwords and machine SID)
+  ansible.builtin.copy:
+    src: "{{ item.stat.path }}"
+    dest: "/var/lib/samba/private/{{ item.item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ samba_tdb_src.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
+  notify: restart samba
+  tags: [passdb]
+
+- name: List Samba users
+  ansible.builtin.command: pdbedit -L
+  register: samba_pdbedit
+  changed_when: false
+  tags: [passdb]
+
+- name: Show Samba users
+  ansible.builtin.debug:
+    msg: "{{ samba_pdbedit.stdout_lines }}"
+  tags: [passdb]
+
+- name: Set Samba service state
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: "{{ samba_services_enabled | bool }}"
+    state: "{{ 'started' if samba_services_enabled | bool else 'stopped' }}"
+  loop: [smbd, nmbd, wsdd2]
+  tags: [service]

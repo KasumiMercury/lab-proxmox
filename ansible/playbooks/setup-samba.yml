@@ -1,0 +1,12 @@
+---
+# Baseline, then the Samba file server (hosts in [samba_samba], from the container "role"
+# in terraform/environments/samba/samba.auto.tfvars).
+# Before cutover run with -e samba_services_enabled=false so the new server stays silent.
+
+- import_playbook: setup.yml
+
+- name: Setup Samba file server
+  hosts: samba_samba
+  become: true
+  roles:
+    - samba
