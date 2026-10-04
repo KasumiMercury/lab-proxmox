@@ -247,6 +247,24 @@ tasks:
         # Extra args after "--" go to ansible-playbook (e.g. -- --limit pve --tags vmagent)
         ansible-playbook -i inventory/hosts.yml --ask-become-pass $OPTS playbooks/setup-monitoring.yml {{.CLI_ARGS}}
 
+  zabbix:setup:
+    desc: Set up Zabbix with TimescaleDB on strix (network devices over SNMP)
+    aliases: [zbx:setup]
+    dir: ansible
+    deps:
+      - ssh:agent
+    cmds:
+      - |
+        export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
+        # The Zabbix and Tailscale secrets are in inventory/host_vars/strix/vault.yml
+        OPTS=""
+        if [ -n "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ]; then
+          OPTS="--vault-password-file $ANSIBLE_VAULT_PASSWORD_FILE"
+        elif [ -f ../.vault_pass.txt ]; then
+          OPTS="--vault-password-file ../.vault_pass.txt"
+        fi
+        ansible-playbook -i inventory/hosts.yml --ask-become-pass $OPTS playbooks/setup-zabbix.yml {{.CLI_ARGS}}
+
   ansible:test-connection:
     desc: Test Ansible connection to VMs
     aliases: [ans:ping]

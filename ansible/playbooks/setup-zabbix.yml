@@ -1,0 +1,9 @@
+---
+# Zabbix (TimescaleDB) on the NAS (strix), mainly for the network devices over SNMP.
+# Run with: task zabbix:setup  (asks for the strix sudo password)
+
+- name: Setup Zabbix
+  hosts: nas
+  become: true
+  roles:
+    - zabbix_server

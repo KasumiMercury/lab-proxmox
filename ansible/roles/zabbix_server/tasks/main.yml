@@ -1,0 +1,89 @@
+---
+- name: Check Docker Compose
+  ansible.builtin.command: docker compose version
+  changed_when: false
+
+- name: Require the secrets
+  ansible.builtin.assert:
+    that:
+      - zabbix_db_password | length > 0
+      - zabbix_admin_password | length > 0
+      - zabbix_snmp_community | length > 0
+      - zabbix_tailscale_oauth_client_secret | length > 0
+    fail_msg: >-
+      vault_zabbix_db_password, vault_zabbix_admin_password, vault_zabbix_snmp_community and
+      vault_tailscale_oauth_client_secret must be set
+      (ansible-vault edit inventory/host_vars/strix/vault.yml)
+  no_log: true
+
+- name: Read the tailnet DNS suffix
+  ansible.builtin.command: tailscale status --self --json
+  register: tailscale_self
+  changed_when: false
+
+- name: Create the project directories
+  ansible.builtin.file:
+    path: "{{ zabbix_dir }}/{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: root
+    mode: "0755"
+  loop:
+    - { path: "" }
+    # The entrypoint of the TimescaleDB image creates PGDATA (pgdata/) below it with its own owner
+    - { path: data/postgres }
+    # The Zabbix server image runs as uid 1997
+    - { path: data/snmptraps, owner: "1997" }
+    - { path: data/export, owner: "1997" }
+    - { path: tailscale/state }
+    - { path: tailscale/config }
+  loop_control:
+    label: "{{ zabbix_dir }}/{{ item.path }}"
+
+- name: Write the database credentials
+  ansible.builtin.template:
+    src: db.env.j2
+    dest: "{{ zabbix_dir }}/db.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Write the Tailscale auth key
+  ansible.builtin.template:
+    src: tailscale.env.j2
+    dest: "{{ zabbix_dir }}/tailscale.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+# Picked up by the container without a restart (TS_SERVE_CONFIG is watched)
+- name: Write the Tailscale serve config
+  ansible.builtin.template:
+    src: serve.json.j2
+    dest: "{{ zabbix_dir }}/tailscale/config/serve.json"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Write compose.yaml
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ zabbix_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start Zabbix
+  community.docker.docker_compose_v2:
+    project_src: "{{ zabbix_dir }}"
+    state: present
+    pull: missing
+
+- name: Configure Zabbix through its API
+  ansible.builtin.import_tasks: api.yml
+
+- name: Show the Zabbix URL
+  ansible.builtin.debug:
+    msg: "Zabbix: https://{{ zabbix_tailscale_hostname }}.{{ (tailscale_self.stdout | from_json).MagicDNSSuffix }}/ (Admin)"

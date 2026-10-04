@@ -1,0 +1,78 @@
+# Managed by Ansible (role zabbix_server)
+name: zabbix
+
+services:
+  timescaledb:
+    image: {{ timescaledb_image }}
+    restart: unless-stopped
+    # timescaledb-tune caps max_connections at 25 for <= 2 GB, fewer than the Zabbix server
+    # processes and the frontend need; -c overrides postgresql.conf, so it also fixes existing data
+    command: ["postgres", "-c", "max_connections={{ timescaledb_max_connections }}"]
+    env_file: db.env
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TS_TUNE_MEMORY: {{ timescaledb_tune_memory }}
+      TS_TUNE_NUM_CPUS: "{{ timescaledb_tune_cpus }}"
+      TIMESCALEDB_TELEMETRY: "off"
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zabbix -d zabbix"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  # Creates the schema on first start; ENABLE_TIMESCALEDB turns history/trends into hypertables then
+  zabbix-server:
+    image: {{ zabbix_server_image }}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    env_file: db.env
+    environment:
+      DB_SERVER_HOST: timescaledb
+      ENABLE_TIMESCALEDB: "true"
+    volumes:
+      - ./data/snmptraps:/var/lib/zabbix/snmptraps
+      - ./data/export:/var/lib/zabbix/export
+
+  zabbix-web:
+    image: {{ zabbix_web_image }}
+    restart: unless-stopped
+    depends_on:
+      - zabbix-server
+    env_file: db.env
+    environment:
+      DB_SERVER_HOST: timescaledb
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_SERVER_NAME: strix
+      PHP_TZ: {{ zabbix_timezone }}
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  # Agent for the built-in "Zabbix server" host (its interface is pointed here by the role).
+  # Runs in a container, so file systems and network interfaces are the container's
+  zabbix-agent:
+    image: {{ zabbix_agent_image }}
+    restart: unless-stopped
+    init: true
+    environment:
+      ZBX_HOSTNAME: Zabbix server
+      ZBX_SERVER_HOST: zabbix-server
+
+  # Publishes the frontend on the tailnet as {{ zabbix_tailscale_hostname }} (serve config in tailscale/config)
+  tailscale:
+    image: {{ zabbix_tailscale_image }}
+    restart: unless-stopped
+    env_file: tailscale.env
+    environment:
+      TS_HOSTNAME: {{ zabbix_tailscale_hostname }}
+      TS_EXTRA_ARGS: --advertise-tags={{ zabbix_tailscale_tags }}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./tailscale/state:/var/lib/tailscale
+      - ./tailscale/config:/config:ro

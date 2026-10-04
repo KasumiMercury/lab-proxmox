@@ -1,0 +1,70 @@
+---
+# Docker Compose project (same /srv/<service> layout as the other services on strix)
+zabbix_dir: /srv/zabbix
+
+# Zabbix 7.4 supports TimescaleDB 2.13-2.29 (manual/installation/requirements); check that page
+# before taking a TimescaleDB minor that Zabbix does not list yet (Renovate asks for approval).
+# The PostgreSQL major (-pg17) cannot be bumped in place.
+# renovate: datasource=docker depName=timescale/timescaledb
+timescaledb_version: 2.29.2-pg17
+timescaledb_image: "timescale/timescaledb:{{ timescaledb_version }}"
+# timescaledb-tune sizes PostgreSQL for this much memory; only applied when the database is created
+timescaledb_tune_memory: 1GB
+timescaledb_tune_cpus: 2
+# The Zabbix server keeps one connection per DB-using process (about 30 with the defaults)
+timescaledb_max_connections: 100
+
+# One tag for server, frontend and agent (Renovate compares only the ubuntu-x.y.z tags)
+# renovate: datasource=docker depName=zabbix/zabbix-server-pgsql
+zabbix_version: ubuntu-7.4.15
+zabbix_server_image: "zabbix/zabbix-server-pgsql:{{ zabbix_version }}"
+zabbix_web_image: "zabbix/zabbix-web-nginx-pgsql:{{ zabbix_version }}"
+zabbix_agent_image: "zabbix/zabbix-agent2:{{ zabbix_version }}"
+zabbix_timezone: Asia/Tokyo
+
+# Secrets in inventory/host_vars/strix/vault.yml
+zabbix_db_password: "{{ vault_zabbix_db_password | default('') }}"
+# Set on the Admin user by the role (the image starts with Admin / zabbix)
+zabbix_admin_password: "{{ vault_zabbix_admin_password | default('') }}"
+# Global macro {$SNMP_COMMUNITY} (secret); the devices need the same read-only community
+zabbix_snmp_community: "{{ vault_zabbix_snmp_community | default('') }}"
+
+# Frontend on the tailnet as its own node (https://<hostname>.<tailnet>.ts.net), like Grafana.
+# Uses the OAuth client of the monitoring_server role (vault_tailscale_oauth_client_secret, tag:strix).
+zabbix_tailscale_hostname: zabbix
+# renovate: datasource=docker depName=tailscale/tailscale
+zabbix_tailscale_version: v1.102.5
+zabbix_tailscale_image: "tailscale/tailscale:{{ zabbix_tailscale_version }}"
+zabbix_tailscale_oauth_client_secret: "{{ vault_tailscale_oauth_client_secret | default('') }}"
+zabbix_tailscale_tags: tag:strix
+
+# Frontend API, reached from strix itself
+zabbix_api_url: http://127.0.0.1:8080/api_jsonrpc.php
+
+# Templates in files/templates, imported (created/updated, removed parts deleted) before the hosts are linked
+zabbix_own_templates:
+  - cisco_envmon_temperature_state.yaml
+zabbix_template_import_rules:
+  template_groups: { createMissing: true }
+  templates: { createMissing: true, updateExisting: true }
+  items: { createMissing: true, updateExisting: true, deleteMissing: true }
+  discoveryRules: { createMissing: true, updateExisting: true, deleteMissing: true }
+  triggers: { createMissing: true, updateExisting: true, deleteMissing: true }
+  valueMaps: { createMissing: true, updateExisting: true, deleteMissing: true }
+
+# Network devices polled over SNMPv2c (community {$SNMP_COMMUNITY}), in host group zabbix_snmp_host_group.
+# templates: names of templates shipped with Zabbix ("... by SNMP" include ICMP ping and uptime).
+zabbix_snmp_host_group: Network devices
+zabbix_snmp_hosts:
+  - name: cisco-891fj
+    visible_name: Cisco 891FJ
+    # Router; also 192.168.0.2 on the upstream side. strix (192.168.110.5) sits on this segment
+    ip: 192.168.110.1
+    # The 891FJ has no temperature sensor values (only states), see files/templates
+    templates: [Cisco IOS by SNMP, Cisco ENVMON temperature state by SNMP]
+  # Management VLAN 10 (router zone MANAGEMENT); the router's zone-pair SERVER-to-MANAGEMENT lets
+  # only strix's SNMP and ping through. There is no Allied Telesis template in Zabbix.
+  - name: at-x210-16gt
+    visible_name: AT-x210-16GT
+    ip: 192.168.10.2
+    templates: [Network Generic Device by SNMP]

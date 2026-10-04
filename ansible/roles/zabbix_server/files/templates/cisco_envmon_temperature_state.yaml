@@ -1,0 +1,72 @@
+# Managed by Ansible (role zabbix_server), imported through the API.
+# For Cisco devices whose CISCO-ENVMON-MIB temperature table has a state but no value
+# (ciscoEnvMonPresent = cAccessMon, e.g. ISR 800 series: descriptions empty, values 0),
+# so "Cisco IOS by SNMP" discovers nothing. One item per table row, keyed by its index.
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a1824651169b4e589305e44dfc54575a
+      name: Templates/Network devices
+  templates:
+    - uuid: 944fcaf44f084830aecc04e55504fdb4
+      template: Cisco ENVMON temperature state by SNMP
+      name: Cisco ENVMON temperature state by SNMP
+      description: 'ciscoEnvMonTemperatureState (1.3.6.1.4.1.9.9.13.1.3.1.6) for devices that report no temperature value. Managed by Ansible.'
+      groups:
+        - name: Templates/Network devices
+      discovery_rules:
+        - uuid: 430b8c1a7e184bdcabaff9b221eb8d64
+          name: Temperature state discovery
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},1.3.6.1.4.1.9.9.13.1.3.1.6]'
+          key: envmon.temperature.state.discovery
+          delay: 1h
+          item_prototypes:
+            - uuid: 5a02e564bc334d9593a9c850ee27343c
+              name: 'Temperature sensor #{#SNMPINDEX}: State'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.9.9.13.1.3.1.6.{#SNMPINDEX}'
+              key: 'envmon.temperature.state[{#SNMPINDEX}]'
+              delay: 3m
+              history: 2w
+              description: 'MIB: CISCO-ENVMON-MIB. ciscoEnvMonTemperatureState of row {#SNMPINDEX}.'
+              valuemap:
+                name: CISCO-ENVMON-MIB::CiscoEnvMonState
+              tags:
+                - tag: component
+                  value: environment
+                - tag: component
+                  value: temperature
+              trigger_prototypes:
+                - uuid: b45d6291ebb742579fcf760aa2b32e6a
+                  expression: 'last(/Cisco ENVMON temperature state by SNMP/envmon.temperature.state[{#SNMPINDEX}])=2'
+                  name: 'Temperature sensor #{#SNMPINDEX}: State is warning'
+                  priority: WARNING
+                - uuid: 3bff2901b4d4432393a2231c31087cb2
+                  expression: 'last(/Cisco ENVMON temperature state by SNMP/envmon.temperature.state[{#SNMPINDEX}])=3'
+                  name: 'Temperature sensor #{#SNMPINDEX}: State is critical'
+                  priority: HIGH
+                - uuid: 7a8b7e697a044aef9ae9dd399f258796
+                  expression: 'last(/Cisco ENVMON temperature state by SNMP/envmon.temperature.state[{#SNMPINDEX}])=4'
+                  name: 'Temperature sensor #{#SNMPINDEX}: State is shutdown'
+                  priority: DISASTER
+                - uuid: 2655ee34e76c4f299ce68845e151d1fe
+                  expression: 'last(/Cisco ENVMON temperature state by SNMP/envmon.temperature.state[{#SNMPINDEX}])=6'
+                  name: 'Temperature sensor #{#SNMPINDEX}: State is not functioning'
+                  priority: AVERAGE
+      valuemaps:
+        - uuid: 5a4cec8651304e4eb23c5ac411e4af92
+          name: CISCO-ENVMON-MIB::CiscoEnvMonState
+          mappings:
+            - value: '1'
+              newvalue: normal
+            - value: '2'
+              newvalue: warning
+            - value: '3'
+              newvalue: critical
+            - value: '4'
+              newvalue: shutdown
+            - value: '5'
+              newvalue: notPresent
+            - value: '6'
+              newvalue: notFunctioning

@@ -1,0 +1,224 @@
+---
+# JSON-RPC calls against the frontend on 127.0.0.1. Zabbix answers errors with HTTP 200 and an
+# "error" member, hence the failed_when on every call.
+
+# The frontend comes up before the server has created the schema on the first start
+- name: Wait for the Zabbix API
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    body: { jsonrpc: "2.0", method: user.login, id: 1, params: { username: Admin, password: "{{ zabbix_admin_password }}" } }
+  register: zabbix_login
+  # Until the schema exists the frontend answers with an HTML error page
+  until: >-
+    zabbix_login.json is defined
+    and (zabbix_login.json.error is not defined or 'Incorrect user name or password' in zabbix_login.json.error.data)
+  retries: 60
+  delay: 5
+  no_log: true
+
+# First run: the image starts with Admin / zabbix
+- name: Set the Admin password
+  when: zabbix_login.json.error is defined
+  no_log: true
+  block:
+    - name: Log in with the default password
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", method: user.login, id: 1, params: { username: Admin, password: zabbix } }
+      register: zabbix_default_login
+      failed_when: zabbix_default_login.json.error is defined
+
+    - name: Look up the Admin user
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        body_format: json
+        headers: { Authorization: "Bearer {{ zabbix_default_login.json.result }}" }
+        body: { jsonrpc: "2.0", method: user.get, id: 1, params: { output: [userid], filter: { username: Admin } } }
+      register: zabbix_admin_user
+      failed_when: zabbix_admin_user.json.error is defined or zabbix_admin_user.json.result | length != 1
+
+    - name: Change the Admin password
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        body_format: json
+        headers: { Authorization: "Bearer {{ zabbix_default_login.json.result }}" }
+        body:
+          jsonrpc: "2.0"
+          method: user.update
+          id: 1
+          params:
+            userid: "{{ zabbix_admin_user.json.result[0].userid }}"
+            current_passwd: zabbix
+            passwd: "{{ zabbix_admin_password }}"
+      register: zabbix_admin_update
+      failed_when: zabbix_admin_update.json.error is defined
+      changed_when: true
+
+    - name: Log in with the new password
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        body_format: json
+        body: { jsonrpc: "2.0", method: user.login, id: 1, params: { username: Admin, password: "{{ zabbix_admin_password }}" } }
+      # Own name: a skipped task still registers, and would overwrite zabbix_login
+      register: zabbix_new_login
+      failed_when: zabbix_new_login.json.error is defined
+
+- name: Keep the API token
+  ansible.builtin.set_fact:
+    zabbix_api_headers:
+      Authorization: >-
+        Bearer {{ zabbix_new_login.json.result if zabbix_login.json.error is defined else zabbix_login.json.result }}
+  no_log: true
+
+# Secret macros cannot be read back, so the value is written on every run
+- name: Look up the global macro {$SNMP_COMMUNITY}
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: usermacro.get, id: 1, params: { globalmacro: true, output: [globalmacroid], filter: { macro: "{$SNMP_COMMUNITY}" } } }
+  register: zabbix_snmp_macro
+  failed_when: zabbix_snmp_macro.json.error is defined
+
+- name: Set the global macro {$SNMP_COMMUNITY}
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: "{{ 'usermacro.updateglobal' if zabbix_snmp_macro.json.result | length > 0 else 'usermacro.createglobal' }}"
+      id: 1
+      params: >-
+        {{ {'type': 1, 'value': zabbix_snmp_community}
+           | combine({'globalmacroid': zabbix_snmp_macro.json.result[0].globalmacroid} if zabbix_snmp_macro.json.result | length > 0
+                     else {'macro': '{$SNMP_COMMUNITY}', 'description': 'SNMPv2c community (Ansible)'}) }}
+  register: zabbix_snmp_macro_set
+  failed_when: zabbix_snmp_macro_set.json.error is defined
+  changed_when: zabbix_snmp_macro.json.result | length == 0
+  no_log: true
+
+# The built-in host expects an agent on 127.0.0.1, which is the server container itself
+- name: Look up the "Zabbix server" host
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: host.get
+      id: 1
+      params: { output: [hostid], filter: { host: Zabbix server }, selectInterfaces: [interfaceid, type, main, useip, dns] }
+  register: zabbix_server_host
+  failed_when: zabbix_server_host.json.error is defined
+
+- name: Point the "Zabbix server" host at the agent container
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: hostinterface.update, id: 1, params: { interfaceid: "{{ item.interfaceid }}", useip: 0, dns: zabbix-agent } }
+  register: zabbix_agent_interface_update
+  failed_when: zabbix_agent_interface_update.json.error is defined
+  changed_when: true
+  when: item.type == '1' and item.main == '1' and (item.useip == '1' or item.dns != 'zabbix-agent')
+  loop: "{{ zabbix_server_host.json.result | map(attribute='interfaces') | flatten }}"
+  loop_control:
+    label: "{{ item.interfaceid }}"
+
+- name: Look up the host group for network devices
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: hostgroup.get, id: 1, params: { output: [groupid], filter: { name: ["{{ zabbix_snmp_host_group }}"] } } }
+  register: zabbix_snmp_group
+  failed_when: zabbix_snmp_group.json.error is defined
+
+- name: Create the host group for network devices
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: hostgroup.create, id: 1, params: { name: "{{ zabbix_snmp_host_group }}" } }
+  register: zabbix_snmp_group_create
+  failed_when: zabbix_snmp_group_create.json.error is defined
+  changed_when: true
+  when: zabbix_snmp_group.json.result | length == 0
+
+- name: Keep the host group ID
+  ansible.builtin.set_fact:
+    zabbix_snmp_groupid: >-
+      {{ zabbix_snmp_group.json.result[0].groupid if zabbix_snmp_group.json.result | length > 0
+         else zabbix_snmp_group_create.json.result.groupids[0] }}
+
+# Own templates (files/templates), compared first so unchanged ones are not re-imported
+- name: Compare the own templates with Zabbix
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: configuration.importcompare
+      id: 1
+      params: { format: yaml, source: "{{ lookup('ansible.builtin.file', 'templates/' ~ item) }}", rules: "{{ zabbix_template_import_rules }}" }
+  register: zabbix_template_compare
+  failed_when: zabbix_template_compare.json.error is defined
+  loop: "{{ zabbix_own_templates }}"
+
+- name: Import the own templates
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: configuration.import
+      id: 1
+      params: { format: yaml, source: "{{ lookup('ansible.builtin.file', 'templates/' ~ item.item) }}", rules: "{{ zabbix_template_import_rules }}" }
+  register: zabbix_template_import
+  failed_when: zabbix_template_import.json.error is defined
+  changed_when: true
+  when: item.json.result | length > 0
+  loop: "{{ zabbix_template_compare.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Look up the templates of the network devices
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: template.get
+      id: 1
+      params: { output: [templateid, host], filter: { host: "{{ zabbix_snmp_hosts | map(attribute='templates') | flatten | unique }}" } }
+  register: zabbix_snmp_templates
+  failed_when: >-
+    zabbix_snmp_templates.json.error is defined
+    or zabbix_snmp_templates.json.result | length != zabbix_snmp_hosts | map(attribute='templates') | flatten | unique | length
+
+- name: Register the network devices
+  ansible.builtin.include_tasks: snmp_host.yml
+  loop: "{{ zabbix_snmp_hosts }}"
+  loop_control:
+    loop_var: zabbix_snmp_host
+    label: "{{ zabbix_snmp_host.name }}"
