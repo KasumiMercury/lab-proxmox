@@ -5,7 +5,7 @@ argocd_namespace: argocd
 argocd_helm_repo: https://argoproj.github.io/argo-helm
 # Chart argo/argo-cd; check its Kubernetes support when bumping (lab-argo then takes over the version)
 # renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
-argocd_chart_version: "10.8.1"
+argocd_chart_version: "10.9.6"
 # Helm values passed at bootstrap (kept minimal; day-2 settings belong to the ArgoCD repo).
 # Self-management later requires the ServerSideApply=true sync option on the ArgoCD Application.
 # The Application health check is set here too, so the sync waves of the root app-of-apps already wait
