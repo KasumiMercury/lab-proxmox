@@ -1,39 +1,6 @@
 version: '3'
 
 tasks:
-  push-secrets:
-    desc: "Encodes JSON file and push it to GitHub Actions secrets"
-    dir: "{{.USER_WORKING_DIR}}"
-    silent: true
-    vars:
-      DATA:
-        sh: cat {{.CLI_ARGS}}
-      FILE_NAME: "{{base .CLI_ARGS}}"
-      ENCODED: "{{ b64enc .DATA }}"
-      SECRET_NAME: "{{.FILE_NAME | replace \".tfvars.json\" \"\" | replace \".auto\" \"\" | replace \" \" \"_\" | replace \"-\" \"_\" | replace \".\" \"_\" | upper}}"
-    cmds:
-      - echo "{{ .SECRET_NAME }}"
-      - task: warning
-      - gh secret set {{ .SECRET_NAME }} --body {{ .ENCODED }}
-
-  warning:
-    prompt: "Are you sure?"
-
-  push-secret-tfvars-json:
-    aliases:
-      - push
-    desc: "Encodes the content of all files ending with tfvars.json in the specified directory"
-    dir: "{{.USER_WORKING_DIR}}"
-    silent: true
-    vars:
-      FILES:
-        sh: find {{.CLI_ARGS}} -name "*tfvars.json" -type f -print
-    cmds:
-      - for: { var: FILES, split: "\n" }
-        task: push-secrets
-        vars:
-          CLI_ARGS: "{{.ITEM}}"
-
   gpg-encrypt-file:
     desc: "Encrypts tfvars.json file with GPG"
     dir: "{{.USER_WORKING_DIR}}"
