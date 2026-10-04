@@ -49,6 +49,20 @@
       "groupName": "VictoriaMetrics"
     },
     {
+      "description": "Zabbix images are tagged <os>-<version>; only compare the ubuntu-x.y.z tags",
+      "matchPackageNames": [
+        "zabbix/zabbix-server-pgsql"
+      ],
+      "versioning": "regex:^ubuntu-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    },
+    {
+      "description": "Zabbix supports only the TimescaleDB versions listed in its requirements; check them before merging",
+      "matchPackageNames": [
+        "timescale/timescaledb"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "Name dashboard PRs after the provisioned file and the grafana.com ID",
       "matchDatasources": [
         "custom.grafana-dashboards"
