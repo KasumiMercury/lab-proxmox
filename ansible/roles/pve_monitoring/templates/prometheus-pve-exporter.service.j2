@@ -1,0 +1,19 @@
+# Managed by Ansible (role pve_monitoring)
+[Unit]
+Description=Prometheus exporter for Proxmox VE
+After=network-online.target pveproxy.service
+Wants=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+ExecStart={{ pve_exporter_dir }}/bin/pve_exporter --config.file {{ pve_exporter_config }} --web.listen-address 127.0.0.1:9221
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

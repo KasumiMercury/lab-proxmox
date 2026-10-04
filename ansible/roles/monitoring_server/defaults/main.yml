@@ -1,0 +1,16 @@
+---
+# Docker Compose project (same /srv/<service> layout as the other services on strix)
+monitoring_dir: /srv/monitoring
+
+victoriametrics_image: victoriametrics/victoria-metrics:v1.153.0
+victoriametrics_retention: 1y
+# Remote write endpoint for the vmagents on the Proxmox nodes (plus 127.0.0.1 for debugging)
+victoriametrics_listen_address: "{{ lan_address }}"
+
+grafana_image: grafana/grafana:13.2.3
+# Only used when Grafana initializes its database (first start); change it in the UI afterwards.
+# Generated once on the controller and kept in the gitignored artifacts directory.
+grafana_admin_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/../artifacts/strix-grafana-admin-password chars=ascii_letters,digits length=24') }}"
+# Grafana listens on localhost and is published on the tailnet with `tailscale serve`
+# (https://<host>.<tailnet>.ts.net)
+grafana_tailscale_serve: true

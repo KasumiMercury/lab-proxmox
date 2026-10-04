@@ -15,6 +15,8 @@
 - Roles live in `roles/` (`roles_path` in `ansible.cfg`). MicroK8s settings (`microk8s_channel`, `microk8s_addons`, `microk8s_cni`, `cilium_config_dir`, group names, timeouts) are in `roles/microk8s/defaults/main.yml`
 - Cilium: every node gets host-side prep (`tasks/cilium_node.yml`, including `tasks/kube_proxy_disable.yml` when the shared values set `kubeProxyReplacement: true`; workers re-run it after join); the control plane deletes the Calico manifest, disables it for restarts, and, if the `cilium` DaemonSet does not exist yet, runs `microk8s helm3 install cilium --values cilium/values.yaml` with the chart from `cilium/version.yaml` (`tasks/cilium_control_plane.yml`). The pod CIDR in the values file is asserted against kube-proxy. Existing installations are left to ArgoCD
 
+- `playbooks/setup-monitoring.yml` (`task monitoring:setup`): uses the static `inventory/hosts.yml` (groups `pve` and `nas`, hosts not created by Terraform) instead of a generated one. Roles `monitoring_server` (strix) and `pve_monitoring` (Proxmox nodes); see "Monitoring" in the top-level README
+
 ## SSH Auth
 - `ANSIBLE_USE_PASSWORDS`: `true` or `false` (default: `false`) to include/exclude passwords in inventory
 

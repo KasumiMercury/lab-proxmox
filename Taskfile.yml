@@ -227,6 +227,19 @@ tasks:
       - task: ansible:generate-inventory
       - task: ansible:run
 
+  monitoring:setup:
+    desc: Set up Proxmox metrics (vmagent etc. on the PVE nodes, VictoriaMetrics + Grafana on strix)
+    aliases: [mon:setup]
+    dir: ansible
+    deps:
+      - ssh:agent
+    cmds:
+      - |
+        export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
+        # Static inventory (not generated from Terraform); strix needs its sudo password
+        # Extra args after "--" go to ansible-playbook (e.g. -- --limit pve --tags vmagent)
+        ansible-playbook -i inventory/hosts.yml --ask-become-pass playbooks/setup-monitoring.yml {{.CLI_ARGS}}
+
   ansible:test-connection:
     desc: Test Ansible connection to VMs
     aliases: [ans:ping]

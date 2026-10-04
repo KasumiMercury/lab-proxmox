@@ -1,0 +1,7 @@
+# Managed by Ansible (role pve_monitoring)
+default:
+  user: {{ pve_exporter_api_user }}
+  token_name: {{ pve_exporter_token_name }}
+  token_value: {{ pve_exporter_token_value }}
+  # Scraped as https://127.0.0.1:8006, which the node certificate does not cover
+  verify_ssl: false

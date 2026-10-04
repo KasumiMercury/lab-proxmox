@@ -1,0 +1,44 @@
+# Managed by Ansible (role pve_monitoring)
+global:
+  scrape_interval: {{ pve_monitoring_scrape_interval }}
+
+scrape_configs:
+  - job_name: node
+    static_configs:
+      - targets: ["127.0.0.1:9100"]
+        labels:
+          instance: {{ inventory_hostname }}
+
+  # Every node also exports the cluster-wide metrics (cluster=1), so they keep coming while any
+  # node is up; dashboards pick one through the instance label
+  - job_name: pve
+    metrics_path: /pve
+    params:
+      target: ["127.0.0.1"]
+      cluster: ["1"]
+      node: ["1"]
+    static_configs:
+      - targets: ["127.0.0.1:9221"]
+        labels:
+          instance: {{ inventory_hostname }}
+
+  - job_name: vmagent
+    static_configs:
+      - targets: ["127.0.0.1:8429"]
+        labels:
+          instance: {{ inventory_hostname }}
+{% if ceph_mgr_dir.stat.exists %}
+
+  # Only the active mgr returns metrics (standbys answer /metrics with an empty 200). The fixed
+  # instance keeps the Ceph series unchanged across mgr failover; "node" stays on the up series
+  # only, to tell the targets apart.
+  - job_name: ceph
+    static_configs:
+      - targets: ["127.0.0.1:9283"]
+        labels:
+          instance: ceph
+          node: {{ inventory_hostname }}
+    metric_relabel_configs:
+      - action: labeldrop
+        regex: node
+{% endif %}

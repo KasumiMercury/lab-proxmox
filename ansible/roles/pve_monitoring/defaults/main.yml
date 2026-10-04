@@ -1,0 +1,22 @@
+---
+# Where vmagent pushes (Prometheus remote write). Set by playbooks/setup-monitoring.yml from the nas host.
+pve_monitoring_remote_write_url: ""
+pve_monitoring_scrape_interval: 30s
+
+# vmagent buffers on disk while the remote write target is unreachable (e.g. strix rebooting),
+# and sends the backlog once it is back. Oldest data is dropped beyond this size.
+vmagent_version: v1.153.0
+# sha256 of vmutils-linux-amd64-<version>.tar.gz (from the release's _checksums.txt)
+vmagent_archive_sha256: 85aea24a4829cf26033d810aceb7888070bd4eaff321357168ff6db24bf7c00c
+vmagent_max_disk_usage: 1GiB
+# Cache limit; the default (60% of RAM) is far beyond what a few local targets need,
+# and the nodes are short on memory
+vmagent_memory_allowed: 256MiB
+
+# Not packaged for Debian trixie, so it is installed from PyPI into a venv
+pve_exporter_version: 3.10.1
+pve_exporter_dir: /opt/prometheus-pve-exporter
+pve_exporter_config: /etc/prometheus/pve.yml
+# Read-only API user (PVEAuditor on /) and its token
+pve_exporter_api_user: prometheus@pve
+pve_exporter_token_name: exporter
