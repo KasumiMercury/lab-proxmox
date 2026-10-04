@@ -1,0 +1,135 @@
+# Managed by Ansible (role zabbix_server), imported through the API.
+# AT-ENVMONv2-MIB (1.3.6.1.4.1.207.8.4.4.3.12) of AlliedWare Plus switches: temperature and voltage
+# sensors. Zabbix ships no Allied Telesis template; link it next to "Network Generic Device by SNMP".
+# Rows are indexed by <stack member>.<board>.<sensor> ({#SNMPINDEX}, e.g. 1.1.5).
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: 56338dc97d3440ea93d87c8dc26429d6
+      name: Templates/Network devices
+  templates:
+    - uuid: f55d18111dca4568b071689270eb1331
+      template: Allied Telesis AlliedWare Plus environment by SNMP
+      name: Allied Telesis AlliedWare Plus environment by SNMP
+      description: 'AT-ENVMONv2-MIB temperature and voltage sensors of AlliedWare Plus devices. Managed by Ansible.'
+      groups:
+        - name: Templates/Network devices
+      macros:
+        - macro: '{$AT.TEMP.WARN.MARGIN}'
+          value: '10'
+          description: 'Warn when the temperature is within this many °C of the sensor''s upper threshold'
+      discovery_rules:
+        - uuid: 0beb0a3d1b434355953fbf8cc2eaa97b
+          name: Temperature sensor discovery
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SENSOR_DESCR},1.3.6.1.4.1.207.8.4.4.3.12.3.1.4]'
+          key: at.envmon.temp.discovery
+          delay: 1h
+          item_prototypes:
+            - uuid: 998bae8a3d0141cd9e8f6766b5c8e9c5
+              name: '{#SENSOR_DESCR}: Temperature'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.207.8.4.4.3.12.3.1.5.{#SNMPINDEX}'
+              key: 'at.envmon.temp[{#SNMPINDEX}]'
+              delay: 3m
+              units: °C
+              description: 'MIB: AT-ENVMONv2-MIB. atEnvMonv2TemperatureCurrent.'
+              tags:
+                - tag: component
+                  value: environment
+                - tag: component
+                  value: temperature
+            - uuid: d9df2e641d1a4875b3dc091f108c6480
+              name: '{#SENSOR_DESCR}: Upper threshold'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.207.8.4.4.3.12.3.1.6.{#SNMPINDEX}'
+              key: 'at.envmon.temp.threshold[{#SNMPINDEX}]'
+              delay: 1h
+              units: °C
+              description: 'MIB: AT-ENVMONv2-MIB. atEnvMonv2TemperatureUpperThreshold.'
+              tags:
+                - tag: component
+                  value: environment
+                - tag: component
+                  value: temperature
+            - uuid: 8a33445b58db44b880f850da0d325f2d
+              name: '{#SENSOR_DESCR}: Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.207.8.4.4.3.12.3.1.7.{#SNMPINDEX}'
+              key: 'at.envmon.temp.status[{#SNMPINDEX}]'
+              delay: 3m
+              description: 'MIB: AT-ENVMONv2-MIB. atEnvMonv2TemperatureStatus.'
+              valuemap:
+                name: AT-ENVMONv2-MIB::Status
+              tags:
+                - tag: component
+                  value: environment
+                - tag: component
+                  value: temperature
+              trigger_prototypes:
+                - uuid: 209c5e77fd644b2eaec9c49f69d0005d
+                  expression: 'last(/Allied Telesis AlliedWare Plus environment by SNMP/at.envmon.temp.status[{#SNMPINDEX}])=1'
+                  name: '{#SENSOR_DESCR}: Temperature is out of range'
+                  priority: HIGH
+          trigger_prototypes:
+            - uuid: a56e1ad1ac144fe0973c4bf5023b1895
+              expression: 'avg(/Allied Telesis AlliedWare Plus environment by SNMP/at.envmon.temp[{#SNMPINDEX}],5m)>last(/Allied Telesis AlliedWare Plus environment by SNMP/at.envmon.temp.threshold[{#SNMPINDEX}])-{$AT.TEMP.WARN.MARGIN}'
+              recovery_mode: RECOVERY_EXPRESSION
+              recovery_expression: 'avg(/Allied Telesis AlliedWare Plus environment by SNMP/at.envmon.temp[{#SNMPINDEX}],5m)<last(/Allied Telesis AlliedWare Plus environment by SNMP/at.envmon.temp.threshold[{#SNMPINDEX}])-{$AT.TEMP.WARN.MARGIN}-3'
+              name: '{#SENSOR_DESCR}: Temperature is near the upper threshold'
+              priority: WARNING
+              dependencies:
+                - name: '{#SENSOR_DESCR}: Temperature is out of range'
+                  expression: 'last(/Allied Telesis AlliedWare Plus environment by SNMP/at.envmon.temp.status[{#SNMPINDEX}])=1'
+        - uuid: 91eaf21951da4043b1d52d7cbb97ff12
+          name: Voltage sensor discovery
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SENSOR_DESCR},1.3.6.1.4.1.207.8.4.4.3.12.2.1.4]'
+          key: at.envmon.voltage.discovery
+          delay: 1h
+          item_prototypes:
+            - uuid: 33789e715884401ab5e69ea289bc764c
+              name: '{#SENSOR_DESCR}: Value'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.207.8.4.4.3.12.2.1.5.{#SNMPINDEX}'
+              key: 'at.envmon.voltage[{#SNMPINDEX}]'
+              delay: 3m
+              value_type: FLOAT
+              units: V
+              description: 'MIB: AT-ENVMONv2-MIB. atEnvMonv2VoltageCurrent (millivolts).'
+              preprocessing:
+                - type: MULTIPLIER
+                  parameters:
+                    - '0.001'
+              tags:
+                - tag: component
+                  value: environment
+                - tag: component
+                  value: voltage
+            - uuid: 676acb97f70d433c9f4187eebf26900d
+              name: '{#SENSOR_DESCR}: Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.207.8.4.4.3.12.2.1.8.{#SNMPINDEX}'
+              key: 'at.envmon.voltage.status[{#SNMPINDEX}]'
+              delay: 3m
+              description: 'MIB: AT-ENVMONv2-MIB. atEnvMonv2VoltageStatus.'
+              valuemap:
+                name: AT-ENVMONv2-MIB::Status
+              tags:
+                - tag: component
+                  value: environment
+                - tag: component
+                  value: voltage
+              trigger_prototypes:
+                - uuid: d4edaf593df744aebede6166ef2561e1
+                  expression: 'last(/Allied Telesis AlliedWare Plus environment by SNMP/at.envmon.voltage.status[{#SNMPINDEX}])=1'
+                  name: '{#SENSOR_DESCR}: Voltage is out of range'
+                  priority: HIGH
+      valuemaps:
+        - uuid: 665fbde4e90a45d1887e29dbd62346ac
+          name: AT-ENVMONv2-MIB::Status
+          mappings:
+            - value: '1'
+              newvalue: outOfRange
+            - value: '2'
+              newvalue: inRange
