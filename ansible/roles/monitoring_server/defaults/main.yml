@@ -16,6 +16,8 @@ grafana_image: "grafana/grafana:{{ grafana_version }}"
 # Generated once on the controller and kept in the gitignored artifacts directory.
 grafana_admin_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/../artifacts/strix-grafana-admin-password chars=ascii_letters,digits length=24') }}"
 # Dashboards from grafana.com, provisioned into the "Proxmox" folder (read-only in the UI).
+# Revisions are bumped by Renovate (custom datasource "grafana-dashboards" in renovate.json);
+# keep the "{ id: ..., revision: ..., file: ..." order it matches.
 # datasource_input: the __inputs name to point at the VictoriaMetrics data source; only for
 # dashboards that use an import-time input instead of a data source variable.
 grafana_dashboards:
