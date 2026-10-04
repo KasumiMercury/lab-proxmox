@@ -137,33 +137,42 @@
   loop_control:
     label: "{{ item.interfaceid }}"
 
-- name: Look up the host group for network devices
-  ansible.builtin.uri:
-    url: "{{ zabbix_api_url }}"
-    method: POST
-    body_format: json
-    headers: "{{ zabbix_api_headers }}"
-    body: { jsonrpc: "2.0", method: hostgroup.get, id: 1, params: { output: [groupid], filter: { name: ["{{ zabbix_snmp_host_group }}"] } } }
-  register: zabbix_snmp_group
-  failed_when: zabbix_snmp_group.json.error is defined
-
-- name: Create the host group for network devices
-  ansible.builtin.uri:
-    url: "{{ zabbix_api_url }}"
-    method: POST
-    body_format: json
-    headers: "{{ zabbix_api_headers }}"
-    body: { jsonrpc: "2.0", method: hostgroup.create, id: 1, params: { name: "{{ zabbix_snmp_host_group }}" } }
-  register: zabbix_snmp_group_create
-  failed_when: zabbix_snmp_group_create.json.error is defined
-  changed_when: true
-  when: zabbix_snmp_group.json.result | length == 0
-
-- name: Keep the host group ID
+- name: Collect the hosts to register
   ansible.builtin.set_fact:
-    zabbix_snmp_groupid: >-
-      {{ zabbix_snmp_group.json.result[0].groupid if zabbix_snmp_group.json.result | length > 0
-         else zabbix_snmp_group_create.json.result.groupids[0] }}
+    zabbix_hosts: >-
+      {{ zabbix_snmp_hosts | map('combine', {'group': zabbix_snmp_host_group})
+         + zabbix_agent_hosts | map('community.general.dict_kv', 'name')
+           | map('combine', {'group': zabbix_agent_host_group, 'templates': zabbix_agent_templates,
+                             'macros': zabbix_agent_macros}) }}
+
+- name: Look up the host groups
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: hostgroup.get, id: 1, params: { output: [groupid, name], filter: { name: "{{ zabbix_hosts | map(attribute='group') | unique }}" } } }
+  register: zabbix_groups
+  failed_when: zabbix_groups.json.error is defined
+
+- name: Create missing host groups
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: hostgroup.create, id: 1, params: { name: "{{ item }}" } }
+  register: zabbix_groups_create
+  failed_when: zabbix_groups_create.json.error is defined
+  changed_when: true
+  loop: "{{ zabbix_hosts | map(attribute='group') | unique | difference(zabbix_groups.json.result | map(attribute='name')) }}"
+
+- name: Keep the host group IDs
+  ansible.builtin.set_fact:
+    zabbix_groupids: >-
+      {{ dict(zabbix_groups.json.result | map(attribute='name') | zip(zabbix_groups.json.result | map(attribute='groupid')))
+         | combine(dict(zabbix_groups_create.results | selectattr('json', 'defined') | map(attribute='item')
+                        | zip(zabbix_groups_create.results | selectattr('json', 'defined') | map(attribute='json.result.groupids.0')))) }}
 
 - name: Look up removed templates
   ansible.builtin.uri:
@@ -223,7 +232,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Look up the templates of the network devices
+- name: Look up the templates of the hosts
   ansible.builtin.uri:
     url: "{{ zabbix_api_url }}"
     method: POST
@@ -233,15 +242,15 @@
       jsonrpc: "2.0"
       method: template.get
       id: 1
-      params: { output: [templateid, host], filter: { host: "{{ zabbix_snmp_hosts | map(attribute='templates') | flatten | unique }}" } }
-  register: zabbix_snmp_templates
+      params: { output: [templateid, host], filter: { host: "{{ zabbix_hosts | map(attribute='templates') | flatten | unique }}" } }
+  register: zabbix_host_templates
   failed_when: >-
-    zabbix_snmp_templates.json.error is defined
-    or zabbix_snmp_templates.json.result | length != zabbix_snmp_hosts | map(attribute='templates') | flatten | unique | length
+    zabbix_host_templates.json.error is defined
+    or zabbix_host_templates.json.result | length != zabbix_hosts | map(attribute='templates') | flatten | unique | length
 
-- name: Register the network devices
-  ansible.builtin.include_tasks: snmp_host.yml
-  loop: "{{ zabbix_snmp_hosts }}"
+- name: Register the hosts
+  ansible.builtin.include_tasks: host.yml
+  loop: "{{ zabbix_hosts }}"
   loop_control:
-    loop_var: zabbix_snmp_host
-    label: "{{ zabbix_snmp_host.name }}"
+    loop_var: zabbix_host
+    label: "{{ zabbix_host.name }}"

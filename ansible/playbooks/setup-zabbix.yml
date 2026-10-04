@@ -1,5 +1,6 @@
 ---
-# Zabbix (TimescaleDB) on the NAS (strix), mainly for the network devices over SNMP.
+# Zabbix (TimescaleDB) on the NAS (strix) for the network devices over SNMP and the Linux side of the
+# Proxmox nodes (Zabbix agent 2, active checks; the Proxmox metrics themselves are in Grafana).
 # Run with: task zabbix:setup  (asks for the strix sudo password)
 
 - name: Setup Zabbix
@@ -7,3 +8,8 @@
   become: true
   roles:
     - zabbix_server
+
+- name: Setup Zabbix agent 2 on Proxmox nodes
+  hosts: pve
+  roles:
+    - zabbix_agent

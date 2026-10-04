@@ -1,0 +1,12 @@
+# Managed by Ansible (role zabbix_agent)
+PidFile=/run/zabbix/zabbix_agent2.pid
+LogFile=/var/log/zabbix/zabbix_agent2.log
+LogFileSize=0
+# Passive checks are not reachable through the router; listed so only the server may ask
+Server={{ zabbix_agent_server }}
+ServerActive={{ zabbix_agent_server }}
+Hostname={{ zabbix_agent_hostname }}
+PluginSocket=/run/zabbix/agent.plugin.sock
+ControlSocket=/run/zabbix/agent.sock
+Include=/etc/zabbix/zabbix_agent2.d/plugins.d/*.conf
+Include=/etc/zabbix/zabbix_agent2.d/*.conf

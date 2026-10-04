@@ -1,0 +1,111 @@
+# Managed by Ansible (role zabbix_server), imported through the API.
+# Temperatures from "sensors -j" (user parameter lmsensors.json, installed by the zabbix_agent role).
+# Discovery keeps the temp*_input subfeatures with a real value (above -273 °C) and takes the chip's
+# _max / _crit as thresholds when they are plausible (0-200 °C; NVMe sub-sensors report 65261 °C).
+# Sensors without a max use {$LMSENSORS.TEMP.WARN} (context "<chip>/<sensor>").
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: 5fc85d3b760a47549e11096df868eb11
+      name: Templates/Operating systems
+  templates:
+    - uuid: a9a527dd4141498f9365618fa3e6f2f8
+      template: Linux lm-sensors by Zabbix agent active
+      name: Linux lm-sensors by Zabbix agent active
+      description: 'lm-sensors temperatures over Zabbix agent active checks (UserParameter lmsensors.json = sensors -j). Managed by Ansible.'
+      groups:
+        - name: Templates/Operating systems
+      macros:
+        - macro: '{$LMSENSORS.TEMP.WARN}'
+          value: '80'
+          description: 'Warning threshold in °C for sensors that report no max; context: <chip>/<sensor>'
+      items:
+        - uuid: 1a4a9dd6c75648babeb50354a44bfee4
+          name: 'lm-sensors: Get data'
+          type: ZABBIX_ACTIVE
+          key: lmsensors.json
+          delay: 1m
+          history: '0'
+          value_type: TEXT
+          description: 'Output of sensors -j; master item of the temperature discovery and items.'
+          tags:
+            - tag: component
+              value: raw
+      discovery_rules:
+        - uuid: f097f59068dd43cc972b2ed7e3110e13
+          name: Temperature sensor discovery
+          type: DEPENDENT
+          key: lmsensors.temp.discovery
+          delay: '0'
+          master_item:
+            key: lmsensors.json
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var data = JSON.parse(value), out = [];
+                  function limit(feature, prefix, name) {
+                      var v = feature[prefix + '_' + name];
+                      return (typeof v === 'number' && v > 0 && v < 200) ? v : 0;
+                  }
+                  for (var chip in data) {
+                      for (var sensor in data[chip]) {
+                          var feature = data[chip][sensor];
+                          if (typeof feature !== 'object' || feature === null) continue;
+                          for (var key in feature) {
+                              var m = key.match(/^(temp[0-9]+)_input$/);
+                              if (!m || typeof feature[key] !== 'number' || feature[key] <= -273) continue;
+                              out.push({
+                                  '{#CHIP}': chip,
+                                  '{#SENSOR}': sensor,
+                                  '{#INPUT}': key,
+                                  '{#TEMP.MAX}': limit(feature, m[1], 'max'),
+                                  '{#TEMP.CRIT}': limit(feature, m[1], 'crit')
+                              });
+                          }
+                      }
+                  }
+                  return JSON.stringify(out);
+            # The sensor list rarely changes; no need to run discovery on every value
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          item_prototypes:
+            - uuid: 0824d2b5a0ff45f783b87b049b9a2715
+              name: '{#CHIP} {#SENSOR}: Temperature'
+              type: DEPENDENT
+              key: 'lmsensors.temp["{#CHIP}","{#SENSOR}"]'
+              delay: '0'
+              value_type: FLOAT
+              units: °C
+              description: 'sensors -j: {#CHIP} / {#SENSOR} / {#INPUT}. max {#TEMP.MAX}, crit {#TEMP.CRIT} (0 = not reported).'
+              master_item:
+                key: lmsensors.json
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - "$['{#CHIP}']['{#SENSOR}']['{#INPUT}']"
+              tags:
+                - tag: component
+                  value: temperature
+                - tag: sensor
+                  value: '{#CHIP}/{#SENSOR}'
+          trigger_prototypes:
+            - uuid: e445caefe2ae4502aeb47a0c5d2380e7
+              expression: '{#TEMP.CRIT}>0 and avg(/Linux lm-sensors by Zabbix agent active/lmsensors.temp["{#CHIP}","{#SENSOR}"],5m)>{#TEMP.CRIT}'
+              recovery_mode: RECOVERY_EXPRESSION
+              recovery_expression: 'avg(/Linux lm-sensors by Zabbix agent active/lmsensors.temp["{#CHIP}","{#SENSOR}"],5m)<{#TEMP.CRIT}-3'
+              name: '{#CHIP} {#SENSOR}: Temperature is above critical threshold'
+              opdata: 'Current: {ITEM.LASTVALUE1}, crit: {#TEMP.CRIT} °C'
+              priority: HIGH
+            - uuid: 48d22b5bf7824e77b63cdb404d216cf5
+              expression: '({#TEMP.MAX}>0 and avg(/Linux lm-sensors by Zabbix agent active/lmsensors.temp["{#CHIP}","{#SENSOR}"],5m)>{#TEMP.MAX}) or ({#TEMP.MAX}=0 and avg(/Linux lm-sensors by Zabbix agent active/lmsensors.temp["{#CHIP}","{#SENSOR}"],5m)>{$LMSENSORS.TEMP.WARN:"{#CHIP}/{#SENSOR}"})'
+              recovery_mode: RECOVERY_EXPRESSION
+              recovery_expression: '({#TEMP.MAX}>0 and avg(/Linux lm-sensors by Zabbix agent active/lmsensors.temp["{#CHIP}","{#SENSOR}"],5m)<{#TEMP.MAX}-3) or ({#TEMP.MAX}=0 and avg(/Linux lm-sensors by Zabbix agent active/lmsensors.temp["{#CHIP}","{#SENSOR}"],5m)<{$LMSENSORS.TEMP.WARN:"{#CHIP}/{#SENSOR}"}-3)'
+              name: '{#CHIP} {#SENSOR}: Temperature is above warning threshold'
+              opdata: 'Current: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              dependencies:
+                - name: '{#CHIP} {#SENSOR}: Temperature is above critical threshold'
+                  expression: '{#TEMP.CRIT}>0 and avg(/Linux lm-sensors by Zabbix agent active/lmsensors.temp["{#CHIP}","{#SENSOR}"],5m)>{#TEMP.CRIT}'
+                  recovery_expression: 'avg(/Linux lm-sensors by Zabbix agent active/lmsensors.temp["{#CHIP}","{#SENSOR}"],5m)<{#TEMP.CRIT}-3'
