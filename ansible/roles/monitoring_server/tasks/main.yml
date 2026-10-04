@@ -28,6 +28,8 @@
     # The Grafana image runs as uid 472
     - { path: data/grafana, owner: "472" }
     - { path: grafana/provisioning/datasources }
+    - { path: grafana/provisioning/dashboards }
+    - { path: grafana/dashboards }
   loop_control:
     label: "{{ monitoring_dir }}/{{ item.path }}"
 
@@ -48,6 +50,38 @@
     group: root
     mode: "0644"
   notify: restart grafana
+
+- name: Provision the dashboard provider
+  ansible.builtin.template:
+    src: dashboards.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboards.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart grafana
+
+- name: Download dashboards from grafana.com
+  ansible.builtin.uri:
+    url: "https://grafana.com/api/dashboards/{{ item.id }}/revisions/{{ item.revision }}/download"
+    return_content: true
+  register: grafana_dashboard_downloads
+  loop: "{{ grafana_dashboards }}"
+  loop_control:
+    label: "{{ item.id }} rev {{ item.revision }}"
+
+# Grafana reloads changed files by itself (updateIntervalSeconds)
+- name: Write dashboards
+  ansible.builtin.copy:
+    content: >-
+      {{ item.content | replace('${' ~ item.item.datasource_input ~ '}', 'victoriametrics')
+         if item.item.datasource_input is defined else item.content }}
+    dest: "{{ monitoring_dir }}/grafana/dashboards/{{ item.item.file }}.json"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ grafana_dashboard_downloads.results }}"
+  loop_control:
+    label: "{{ item.item.file }}.json"
 
 - name: Write compose.yaml
   ansible.builtin.template:

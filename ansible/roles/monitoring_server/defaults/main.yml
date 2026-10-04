@@ -11,6 +11,14 @@ grafana_image: grafana/grafana:13.2.3
 # Only used when Grafana initializes its database (first start); change it in the UI afterwards.
 # Generated once on the controller and kept in the gitignored artifacts directory.
 grafana_admin_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/../artifacts/strix-grafana-admin-password chars=ascii_letters,digits length=24') }}"
+# Dashboards from grafana.com, provisioned into the "Proxmox" folder (read-only in the UI).
+# datasource_input: the __inputs name to point at the VictoriaMetrics data source; only for
+# dashboards that use an import-time input instead of a data source variable.
+grafana_dashboards:
+  - { id: 10347, revision: 5, file: proxmox, datasource_input: DS_PROMETHEUS }
+  - { id: 1860, revision: 45, file: node-exporter-full }
+  - { id: 2842, revision: 18, file: ceph-cluster }
+
 # Grafana listens on localhost and is published on the tailnet with `tailscale serve`
 # (https://<host>.<tailnet>.ts.net)
 grafana_tailscale_serve: true

@@ -86,7 +86,8 @@ If a step fails, re-running `task ans:run TF_ENV=k8s` is safe. Cilium and Argo C
 - The exporter uses the API user `prometheus@pve` (PVEAuditor on `/`) with token `exporter`. The secret is shown only when the token is created, so the role writes it to `/etc/prometheus/pve.yml` on every node in the same run. If a node lacks that file later (e.g. a new node), the role fails: remove the token (`pveum user token remove prometheus@pve exporter`) and re-run to issue a new one everywhere
 - Ceph: the role enables the mgr `prometheus` module and every node with a mgr (yesod, netzach) scrapes it locally. A standby mgr answers `/metrics` with an empty 200, so only the active one yields data. Ceph series carry `instance="ceph"` regardless of which mgr is active; `up{job="ceph"}` keeps a `node` label to tell the two targets apart
 - PVE cluster metrics (guests, storage) come from every node's exporter (`cluster=1`), distinguished by `instance`
-- Dashboards are imported in the Grafana UI (grafana.com IDs): 10347 Proxmox via Prometheus, 1860 Node Exporter Full, 2842 Ceph Cluster
+- The mgr also exports daemon perf counters (`exclude_perf_counters=false`; since Reef they are left to ceph-exporter, which pveceph does not deploy), for the OSD I/O panels
+- Dashboards (`grafana_dashboards` in the role defaults) are downloaded from grafana.com at pinned revisions and provisioned read-only into the "Proxmox" folder: 10347 Proxmox via Prometheus, 1860 Node Exporter Full, 2842 Ceph Cluster. Dashboards with an import-time data source input (`datasource_input`) get it replaced by the VictoriaMetrics data source
 
 ## Terraform Layout
 - `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
