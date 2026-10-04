@@ -1,0 +1,21 @@
+# Managed by Ansible (role monitoring_server)
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: Slack
+    receivers:
+      - uid: slack
+        type: slack
+        settings:
+          recipient: {{ grafana_slack_channel | to_json }}
+          token: {{ grafana_slack_bot_token | to_json }}
+        disableResolveMessage: false
+
+# Replaces the whole policy tree of the organization: everything goes to Slack
+policies:
+  - orgId: 1
+    receiver: Slack
+    group_by: [grafana_folder, alertname]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h

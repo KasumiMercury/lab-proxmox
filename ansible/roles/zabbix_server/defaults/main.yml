@@ -29,6 +29,10 @@ zabbix_admin_password: "{{ vault_zabbix_admin_password | default('') }}"
 # Global macro {$SNMP_COMMUNITY} (secret); the devices need the same read-only community
 zabbix_snmp_community: "{{ vault_zabbix_snmp_community | default('') }}"
 
+# Bot token (xoxb-) of the Slack App shared with Grafana (role monitoring_server): scopes chat:write,
+# im:write, groups:write and reactions:write, and the bot invited to the channel. Secret in the vault.
+zabbix_slack_bot_token: "{{ vault_slack_bot_token | default('') }}"
+
 # Frontend on the tailnet as its own node (https://<hostname>.<tailnet>.ts.net), like Grafana.
 # Uses the OAuth client of the monitoring_server role (vault_tailscale_oauth_client_secret, tag:strix).
 zabbix_tailscale_hostname: zabbix
@@ -90,3 +94,13 @@ zabbix_agent_macros:
   # Template default plus the Proxmox guest and firewall bridge interfaces
   "{$NET.IF.IFNAME.NOT_MATCHES}": >-
     (^Software Loopback Interface|^NULL[0-9.]*$|^[Ll]o[0-9.]*$|^[Ss]ystem$|^Nu[0-9.]*$|^veth[0-9A-z]+$|docker[0-9]+|br-[a-z0-9]{12}|^(tap|fwbr|fwpr|fwln)[0-9]+)
+
+# Slack notifications through the built-in "Slack" media type (alarm mode: the message of a problem is
+# updated when it resolves), sent to the Admin user's media. The action covers the problems at or above
+# zabbix_slack_min_severity (0 not classified .. 5 disaster; 3 = Average) and, whatever their severity,
+# those whose name contains one of zabbix_slack_event_names (the temperature triggers of all hosts:
+# Cisco IOS, the own AT-x210 and lm-sensors templates). Suppressed problems (maintenance) are skipped.
+zabbix_slack_channel: "#zabbix"
+zabbix_slack_action_name: Notify Slack
+zabbix_slack_min_severity: 3
+zabbix_slack_event_names: [Temperature]

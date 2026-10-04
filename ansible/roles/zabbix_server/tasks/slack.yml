@@ -1,0 +1,236 @@
+---
+# Slack notifications: the built-in "Slack" media type gets the bot token, the Admin user a Slack
+# media (the channel) and the action zabbix_slack_action_name sends the problems to it.
+# Uses the API token of api.yml.
+
+# The media type links back to the frontend through {$ZABBIX.URL}
+- name: Look up the global macro {$ZABBIX.URL}
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: usermacro.get, id: 1, params: { globalmacro: true, output: [globalmacroid, value], filter: { macro: "{$ZABBIX.URL}" } } }
+  register: zabbix_url_macro
+  failed_when: zabbix_url_macro.json.error is defined
+
+- name: Set the global macro {$ZABBIX.URL}
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: "{{ 'usermacro.updateglobal' if zabbix_url_macro.json.result | length > 0 else 'usermacro.createglobal' }}"
+      id: 1
+      params: >-
+        {{ {'value': zabbix_frontend_url}
+           | combine({'globalmacroid': zabbix_url_macro.json.result[0].globalmacroid} if zabbix_url_macro.json.result | length > 0
+                     else {'macro': '{$ZABBIX.URL}', 'description': 'Frontend URL for links in notifications (Ansible)'}) }}
+  register: zabbix_url_macro_set
+  failed_when: zabbix_url_macro_set.json.error is defined
+  changed_when: true
+  when: zabbix_url_macro.json.result | length == 0 or zabbix_url_macro.json.result[0].value != zabbix_frontend_url
+  vars:
+    zabbix_frontend_url: "https://{{ zabbix_tailscale_hostname }}.{{ (tailscale_self.stdout | from_json).MagicDNSSuffix }}"
+
+- name: Look up the Slack media type
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: mediatype.get, id: 1, params: { output: [mediatypeid, status, parameters], filter: { name: Slack } } }
+  register: zabbix_slack_mediatype
+  failed_when: zabbix_slack_mediatype.json.error is defined or zabbix_slack_mediatype.json.result | length != 1
+  no_log: true
+
+# The parameters are replaced as a whole; only bot_token differs from the shipped ones
+- name: Enable the Slack media type with the bot token
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: mediatype.update
+      id: 1
+      params:
+        mediatypeid: "{{ current.mediatypeid }}"
+        status: 0
+        parameters: >-
+          {{ current.parameters | rejectattr('name', 'equalto', 'bot_token')
+             + [{'name': 'bot_token', 'value': zabbix_slack_bot_token}] }}
+  register: zabbix_slack_mediatype_update
+  failed_when: zabbix_slack_mediatype_update.json.error is defined
+  changed_when: true
+  when: >-
+    current.status != '0'
+    or current.parameters | selectattr('name', 'equalto', 'bot_token') | map(attribute='value') | list != [zabbix_slack_bot_token]
+  vars:
+    current: "{{ zabbix_slack_mediatype.json.result[0] }}"
+  no_log: true
+
+- name: Keep the Slack media type ID
+  ansible.builtin.set_fact:
+    zabbix_slack_mediatypeid: "{{ zabbix_slack_mediatype.json.result[0].mediatypeid }}"
+
+- name: Look up the media of the Admin user
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: user.get
+      id: 1
+      params:
+        output: [userid]
+        filter: { username: Admin }
+        selectMedias: [mediaid, mediatypeid, sendto, active, severity, period]
+  register: zabbix_admin_media
+  failed_when: zabbix_admin_media.json.error is defined or zabbix_admin_media.json.result | length != 1
+
+- name: Keep the Admin user ID
+  ansible.builtin.set_fact:
+    zabbix_admin_userid: "{{ zabbix_admin_media.json.result[0].userid }}"
+
+# user.update replaces the media list: the other media are passed back unchanged.
+# Every severity (63) and all the time; the action decides what is sent.
+- name: Set the Slack media of the Admin user
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: user.update
+      id: 1
+      params:
+        userid: "{{ zabbix_admin_userid }}"
+        medias: >-
+          {{ medias | rejectattr('mediatypeid', 'equalto', zabbix_slack_mediatypeid) | list
+             + [desired | combine({'mediaid': slack[0].mediaid} if slack else {})] }}
+  register: zabbix_admin_media_set
+  failed_when: zabbix_admin_media_set.json.error is defined
+  changed_when: true
+  when: >-
+    slack | length != 1
+    or slack[0].sendto != desired.sendto or slack[0].active != '0'
+    or slack[0].severity != '63' or slack[0].period != desired.period
+  vars:
+    medias: "{{ zabbix_admin_media.json.result[0].medias }}"
+    slack: "{{ medias | selectattr('mediatypeid', 'equalto', zabbix_slack_mediatypeid) | list }}"
+    desired:
+      mediatypeid: "{{ zabbix_slack_mediatypeid }}"
+      sendto: "{{ zabbix_slack_channel }}"
+      active: 0
+      severity: 63
+      period: 1-7,00:00-24:00
+
+- name: Build the Slack action
+  ansible.builtin.set_fact:
+    # Formula IDs: A for the severity, B... for the names, then the suppression check.
+    # Condition fields as strings, the way action.get returns them (compared below). The suppression
+    # condition takes no value.
+    zabbix_slack_action:
+      name: "{{ zabbix_slack_action_name }}"
+      eventsource: 0
+      status: 0
+      esc_period: 1h
+      filter:
+        evaltype: 3
+        formula: >-
+          ({{ (['A'] + letters[1:names | length + 1]) | join(' or ') }}) and {{ letters[names | length + 1] }}
+        conditions: >-
+          {{ [{'conditiontype': '4', 'operator': '5', 'value': zabbix_slack_min_severity | string, 'formulaid': 'A'}]
+             + names | map('community.general.dict_kv', 'value')
+               | map('combine', {'conditiontype': '3', 'operator': '2'})
+               | zip(letters[1:names | length + 1] | map('community.general.dict_kv', 'formulaid'))
+               | map('combine') | list
+             + [{'conditiontype': '16', 'operator': '11', 'formulaid': letters[names | length + 1]}] }}
+      operations:
+        - operationtype: 0
+          esc_step_from: 1
+          esc_step_to: 1
+          opmessage: { default_msg: 1, mediatypeid: "{{ zabbix_slack_mediatypeid }}" }
+          opmessage_usr: [{ userid: "{{ zabbix_admin_userid }}" }]
+      # Recovery and acknowledgement updates to everyone notified (alarm mode edits the Slack message)
+      recovery_operations:
+        - operationtype: 11
+          opmessage: { default_msg: 1 }
+      update_operations:
+        - operationtype: 12
+          opmessage: { default_msg: 1 }
+  vars:
+    names: "{{ zabbix_slack_event_names }}"
+    letters: "{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' | list }}"
+
+- name: Look up the Slack action
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: action.get
+      id: 1
+      params:
+        output: [actionid, status, esc_period]
+        filter: { name: "{{ zabbix_slack_action_name }}", eventsource: 0 }
+        selectFilter: extend
+        selectOperations: extend
+        selectRecoveryOperations: [operationtype]
+        selectUpdateOperations: [operationtype]
+  register: zabbix_slack_action_existing
+  failed_when: zabbix_slack_action_existing.json.error is defined
+
+- name: Create the Slack action
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: action.create, id: 1, params: "{{ zabbix_slack_action }}" }
+  register: zabbix_slack_action_create
+  failed_when: zabbix_slack_action_create.json.error is defined
+  changed_when: true
+  when: zabbix_slack_action_existing.json.result | length == 0
+
+# Compared on what the role sets: filter, status, escalation period and the operation targets
+- name: Update the Slack action
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body:
+      jsonrpc: "2.0"
+      method: action.update
+      id: 1
+      params: "{{ zabbix_slack_action | dict2items | rejectattr('key', 'in', ['eventsource']) | items2dict | combine({'actionid': current.actionid}) }}"
+  register: zabbix_slack_action_update
+  failed_when: zabbix_slack_action_update.json.error is defined
+  changed_when: true
+  when: >-
+    zabbix_slack_action_existing.json.result | length > 0
+    and (current.status != '0' or current.esc_period != zabbix_slack_action.esc_period
+         or current.filter.evaltype != '3' or current.filter.formula != zabbix_slack_action.filter.formula
+         or current_conditions != desired_conditions
+         or current.operations | length != 1
+         or current.operations[0].operationtype != '0'
+         or current.operations[0].opmessage.mediatypeid != zabbix_slack_mediatypeid
+         or current.operations[0].opmessage_usr | map(attribute='userid') | list != [zabbix_admin_userid]
+         or current.recoveryOperations | map(attribute='operationtype') | list != ['11']
+         or current.updateOperations | map(attribute='operationtype') | list != ['12'])
+  vars:
+    current: "{{ zabbix_slack_action_existing.json.result[0] }}"
+    current_conditions: >-
+      {{ current.filter.conditions | map('dict2items') | map('selectattr', 'key', 'in', ['conditiontype', 'operator', 'value', 'formulaid'])
+         | map('rejectattr', 'value', 'equalto', '') | map('items2dict') | map('to_json', sort_keys=true) | sort }}
+    desired_conditions: "{{ zabbix_slack_action.filter.conditions | map('to_json', sort_keys=true) | sort }}"

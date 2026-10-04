@@ -1,0 +1,103 @@
+# Managed by Ansible (role monitoring_server)
+# Each rule is an instant query (A) and a threshold on it (B). Queries that return nothing while all
+# is well (No data) count as normal. Annotations use .Labels / .Values: a "$" would be taken for an
+# environment variable by the provisioning.
+{%- set rules = [
+  {
+    'uid': 'pve-node-offline', 'title': 'Proxmox node offline', 'severity': 'critical', 'for': '2m',
+    'expr': 'min by (id) (pve_up{job="pve", id=~"node/.*"})',
+    'evaluator': {'type': 'lt', 'params': [1]},
+    'summary': 'Proxmox node {{ .Labels.id }} is offline in the cluster',
+  },
+  {
+    'uid': 'pve-metrics-missing', 'title': 'Metrics missing from a Proxmox node', 'severity': 'critical', 'for': '1m',
+    'expr': 'group by (instance) (last_over_time(up{job="vmagent"}[1d])) unless group by (instance) (last_over_time(up{job="vmagent"}[5m]))',
+    'evaluator': {'type': 'gt', 'params': [0]},
+    'summary': 'No metrics from {{ .Labels.instance }} for 5 minutes (node down or vmagent not pushing)',
+  },
+  {
+    'uid': 'pve-scrape-failed', 'title': 'Exporter down on a Proxmox node', 'severity': 'warning', 'for': '5m',
+    'expr': 'up{job=~"node|pve|ceph"}',
+    'evaluator': {'type': 'lt', 'params': [1]},
+    'summary': 'vmagent on {{ or .Labels.node .Labels.instance }} cannot scrape {{ .Labels.job }}',
+  },
+  {
+    'uid': 'pve-guest-down', 'title': 'Guest not running', 'severity': 'critical', 'for': '5m',
+    'expr': 'max by (id, name) (pve_up{id=~"(qemu|lxc)/.*"} * on (id, instance) group_left (name) pve_guest_info{template="0", name=~"' ~ grafana_alert_running_guests ~ '"})',
+    'evaluator': {'type': 'lt', 'params': [1]},
+    'summary': '{{ .Labels.name }} ({{ .Labels.id }}) is not running',
+  },
+  {
+    'uid': 'pve-storage-usage', 'title': 'Proxmox storage almost full', 'severity': 'warning', 'for': '15m',
+    'expr': 'max by (id) (pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes{id=~"storage/.*"})',
+    'evaluator': {'type': 'gt', 'params': [grafana_alert_storage_usage]},
+    'summary': '{{ .Labels.id }} is {{ humanizePercentage .Values.A.Value }} full',
+  },
+  {
+    'uid': 'ceph-health-warn', 'title': 'Ceph HEALTH_WARN', 'severity': 'warning', 'for': '5m',
+    'expr': 'ceph_health_status',
+    'evaluator': {'type': 'within_range', 'params': [0.5, 1.5]},
+    'summary': 'Ceph reports HEALTH_WARN (ceph health detail)',
+  },
+  {
+    'uid': 'ceph-health-err', 'title': 'Ceph HEALTH_ERR', 'severity': 'critical', 'for': '1m',
+    'expr': 'ceph_health_status',
+    'evaluator': {'type': 'gt', 'params': [1.5]},
+    'summary': 'Ceph reports HEALTH_ERR (ceph health detail)',
+  },
+  {
+    'uid': 'ceph-osd-down', 'title': 'Ceph OSD down', 'severity': 'critical', 'for': '5m',
+    'expr': 'ceph_osd_up',
+    'evaluator': {'type': 'lt', 'params': [1]},
+    'summary': '{{ .Labels.ceph_daemon }} is down',
+  },
+  {
+    'uid': 'ceph-pool-usage', 'title': 'Ceph pool almost full', 'severity': 'warning', 'for': '15m',
+    'expr': 'ceph_pool_percent_used * on (pool_id) group_left (name) ceph_pool_metadata',
+    'evaluator': {'type': 'gt', 'params': [grafana_alert_ceph_pool_usage]},
+    'summary': 'Ceph pool {{ .Labels.name }} is {{ humanizePercentage .Values.A.Value }} full',
+  },
+  {
+    'uid': 'ceph-metrics-missing', 'title': 'Ceph metrics missing', 'severity': 'critical', 'for': '1m',
+    'expr': 'absent_over_time(ceph_health_status[10m])',
+    'evaluator': {'type': 'gt', 'params': [0]},
+    'summary': 'No Ceph metrics for 10 minutes (no active mgr, or its prometheus module is off)',
+  },
+] %}
+
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: Proxmox
+    folder: Proxmox
+    interval: 1m
+    rules:
+{% for rule in rules %}
+      - uid: {{ rule.uid }}
+        title: {{ rule.title | to_json }}
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              expr: {{ rule.expr | to_json }}
+              instant: true
+              range: false
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {{ rule.evaluator | to_json }}
+        noDataState: OK
+        execErrState: Error
+        for: {{ rule.for }}
+        labels:
+          severity: {{ rule.severity }}
+        annotations:
+          summary: {{ rule.summary | to_json }}
+{% endfor %}

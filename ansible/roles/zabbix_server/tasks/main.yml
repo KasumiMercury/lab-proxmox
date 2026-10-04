@@ -10,9 +10,10 @@
       - zabbix_admin_password | length > 0
       - zabbix_snmp_community | length > 0
       - zabbix_tailscale_oauth_client_secret | length > 0
+      - zabbix_slack_bot_token | length > 0
     fail_msg: >-
-      vault_zabbix_db_password, vault_zabbix_admin_password, vault_zabbix_snmp_community and
-      vault_tailscale_oauth_client_secret must be set
+      vault_zabbix_db_password, vault_zabbix_admin_password, vault_zabbix_snmp_community,
+      vault_tailscale_oauth_client_secret and vault_slack_bot_token must be set
       (ansible-vault edit inventory/host_vars/strix/vault.yml)
   no_log: true
 
@@ -83,6 +84,9 @@
 
 - name: Configure Zabbix through its API
   ansible.builtin.import_tasks: api.yml
+
+- name: Configure the Slack notifications
+  ansible.builtin.import_tasks: slack.yml
 
 - name: Show the Zabbix URL
   ansible.builtin.debug:
