@@ -1,0 +1,26 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "git-submodules": {
+    "enabled": true
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Versions in Ansible role defaults, annotated with a '# renovate:' comment on the line above",
+      "managerFilePatterns": ["/^ansible/roles/[^/]+/defaults/main\\.yml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[A-Za-z0-9_]+:\\s*[\"']?(?<currentValue>[^\\s\"']+)"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "vmagent on the Proxmox nodes and VictoriaMetrics on strix move together",
+      "matchPackageNames": ["victoriametrics/victoria-metrics", "VictoriaMetrics/VictoriaMetrics"],
+      "groupName": "VictoriaMetrics"
+    }
+  ]
+}
