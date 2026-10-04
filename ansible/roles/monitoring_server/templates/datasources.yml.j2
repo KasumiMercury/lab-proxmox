@@ -1,0 +1,13 @@
+# Managed by Ansible (role monitoring_server)
+apiVersion: 1
+datasources:
+  - name: VictoriaMetrics
+    uid: victoriametrics
+    type: prometheus
+    access: proxy
+    url: http://victoriametrics:8428
+    isDefault: true
+    jsonData:
+      prometheusType: Prometheus
+      # Scrape interval of the vmagents on the Proxmox nodes
+      timeInterval: 30s

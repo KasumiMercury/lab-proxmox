@@ -79,6 +79,15 @@ If a step fails, re-running `task ans:run TF_ENV=k8s` is safe. Cilium and Argo C
 - Samba passwords and the machine SID come from `passdb.tdb` / `secrets.tdb` of the old server, placed in `ansible/artifacts/samba/` (gitignored). The role copies them when present
 - `task ans:run TF_ENV=samba -- -e samba_services_enabled=false` configures everything but keeps smbd/nmbd/wsdd2 stopped (used while the old server is still up). Arguments after `--` go to `ansible-playbook`
 
+## Monitoring (Proxmox nodes and strix)
+`task monitoring:setup` runs `ansible/playbooks/setup-monitoring.yml` against the static inventory `ansible/inventory/hosts.yml` (Proxmox nodes as root, the NAS strix as `mercury` over Tailscale; it asks for strix's sudo password).
+- strix (role `monitoring_server`): Docker Compose project `/srv/monitoring` with VictoriaMetrics (retention 1y, listening on `192.168.110.5:8428` and `127.0.0.1:8428`) and Grafana. Grafana listens on localhost only and is published with `tailscale serve` at `https://strix.<tailnet>.ts.net`; the VictoriaMetrics data source is provisioned. The initial admin password is generated into `ansible/artifacts/strix-grafana-admin-password` (gitignored) and only applies on Grafana's first start
+- Proxmox nodes (role `pve_monitoring`): node_exporter (Debian package, `127.0.0.1:9100`), prometheus-pve-exporter (PyPI venv in `/opt/prometheus-pve-exporter`, `127.0.0.1:9221`) and vmagent (`127.0.0.1:8429`). vmagent scrapes the local exporters every 30s and pushes to strix. Push, because the router routes 192.168.20.0/24 → strix but not strix → 192.168.20.0/24. While strix is unreachable vmagent buffers up to 1 GiB per node in `/var/lib/vmagent` and sends it later
+- The exporter uses the API user `prometheus@pve` (PVEAuditor on `/`) with token `exporter`. The secret is shown only when the token is created, so the role writes it to `/etc/prometheus/pve.yml` on every node in the same run. If a node lacks that file later (e.g. a new node), the role fails: remove the token (`pveum user token remove prometheus@pve exporter`) and re-run to issue a new one everywhere
+- Ceph: the role enables the mgr `prometheus` module and every node with a mgr (yesod, netzach) scrapes it locally. A standby mgr answers `/metrics` with an empty 200, so only the active one yields data. Ceph series carry `instance="ceph"` regardless of which mgr is active; `up{job="ceph"}` keeps a `node` label to tell the two targets apart
+- PVE cluster metrics (guests, storage) come from every node's exporter (`cluster=1`), distinguished by `instance`
+- Dashboards are imported in the Grafana UI (grafana.com IDs): 10347 Proxmox via Prometheus, 1860 Node Exporter Full, 2842 Ceph Cluster
+
 ## Terraform Layout
 - `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
 - `terraform/environments/<env>/`: symlinks to `shared/*.tf` plus `<env>.auto.tfvars`, `<env>_credential.auto.tfvars.json(.gpg)`, `.terraform.lock.hcl`

@@ -1,0 +1,239 @@
+---
+- name: Require the remote write URL
+  ansible.builtin.assert:
+    that: pve_monitoring_remote_write_url | length > 0
+    fail_msg: pve_monitoring_remote_write_url is not set
+
+- name: Install node_exporter and python3-venv
+  ansible.builtin.apt:
+    name:
+      - prometheus-node-exporter
+      - python3-venv
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: [packages]
+
+# Scraped by the local vmagent only
+- name: Bind node_exporter to localhost
+  ansible.builtin.lineinfile:
+    path: /etc/default/prometheus-node-exporter
+    regexp: '^ARGS='
+    line: 'ARGS="--web.listen-address=127.0.0.1:9100"'
+  notify: restart node_exporter
+  tags: [node_exporter]
+
+- name: Start node_exporter
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started
+  tags: [node_exporter]
+
+# --- PVE API user and token (cluster-wide, so once) ---
+
+- name: Create and grant the exporter API user
+  run_once: true
+  tags: [pve_exporter]
+  block:
+    - name: List PVE users
+      ansible.builtin.command: pveum user list --output-format json
+      register: pve_users
+      changed_when: false
+
+    - name: Create the exporter API user
+      ansible.builtin.command: >-
+        pveum user add {{ pve_exporter_api_user }}
+        --comment "prometheus-pve-exporter (managed by Ansible)"
+      when: pve_exporter_api_user not in (pve_users.stdout | from_json | map(attribute='userid'))
+
+    - name: List ACLs
+      ansible.builtin.command: pveum acl list --output-format json
+      register: pve_acls
+      changed_when: false
+
+    - name: Grant PVEAuditor on / to the exporter API user
+      ansible.builtin.command: >-
+        pveum acl modify / --users {{ pve_exporter_api_user }} --roles PVEAuditor
+      when: >-
+        pve_acls.stdout | from_json
+        | selectattr('path', 'equalto', '/')
+        | selectattr('ugid', 'equalto', pve_exporter_api_user)
+        | selectattr('roleid', 'equalto', 'PVEAuditor')
+        | list | length == 0
+
+    - name: List the exporter API user's tokens
+      ansible.builtin.command: pveum user token list {{ pve_exporter_api_user }} --output-format json
+      register: pve_tokens
+      changed_when: false
+
+    # The secret is only shown at creation, so it goes straight into pve.yml on every node.
+    # privsep 0: the token has the user's (read-only) permissions.
+    - name: Create the exporter API token
+      ansible.builtin.command: >-
+        pveum user token add {{ pve_exporter_api_user }} {{ pve_exporter_token_name }}
+        --privsep 0 --comment "prometheus-pve-exporter" --output-format json
+      register: pve_token_created
+      no_log: true
+      when: pve_exporter_token_name not in (pve_tokens.stdout | from_json | map(attribute='tokenid'))
+
+- name: Check for an existing exporter config
+  ansible.builtin.stat:
+    path: "{{ pve_exporter_config }}"
+  register: pve_exporter_config_stat
+  tags: [pve_exporter]
+
+- name: Fail when the token exists but this node has no copy of its secret
+  ansible.builtin.fail:
+    msg: >-
+      Token {{ pve_exporter_api_user }}!{{ pve_exporter_token_name }} already exists but
+      {{ pve_exporter_config }} is missing here. Delete the token
+      (pveum user token remove {{ pve_exporter_api_user }} {{ pve_exporter_token_name }}) and rerun
+      to issue a new one for every node.
+  when:
+    - pve_token_created is skipped
+    - not pve_exporter_config_stat.stat.exists
+  tags: [pve_exporter]
+
+- name: Create the exporter config directory
+  ansible.builtin.file:
+    path: "{{ pve_exporter_config | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [pve_exporter]
+
+- name: Write the exporter config with the new token
+  ansible.builtin.template:
+    src: pve.yml.j2
+    dest: "{{ pve_exporter_config }}"
+    owner: root
+    group: prometheus
+    mode: "0640"
+  vars:
+    pve_exporter_token_value: "{{ (pve_token_created.stdout | from_json).value }}"
+  no_log: true
+  when: pve_token_created is not skipped
+  notify: restart pve_exporter
+  tags: [pve_exporter]
+
+- name: Install prometheus-pve-exporter
+  ansible.builtin.pip:
+    name: "prometheus-pve-exporter=={{ pve_exporter_version }}"
+    virtualenv: "{{ pve_exporter_dir }}"
+    virtualenv_command: python3 -m venv
+  notify: restart pve_exporter
+  tags: [pve_exporter]
+
+- name: Install the prometheus-pve-exporter unit
+  ansible.builtin.template:
+    src: prometheus-pve-exporter.service.j2
+    dest: /etc/systemd/system/prometheus-pve-exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart pve_exporter
+  tags: [pve_exporter]
+
+- name: Start prometheus-pve-exporter
+  ansible.builtin.systemd:
+    name: prometheus-pve-exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [pve_exporter]
+
+# --- Ceph mgr prometheus module (cluster-wide config, so once) ---
+
+- name: Enable the Ceph mgr prometheus module
+  run_once: true
+  tags: [ceph]
+  block:
+    - name: List mgr modules
+      ansible.builtin.command: ceph mgr module ls --format json
+      register: ceph_mgr_modules
+      changed_when: false
+
+    - name: Enable the prometheus module
+      ansible.builtin.command: ceph mgr module enable prometheus
+      when: "'prometheus' not in (ceph_mgr_modules.stdout | from_json).enabled_modules"
+
+- name: Check whether this node runs a Ceph mgr
+  ansible.builtin.stat:
+    path: "/var/lib/ceph/mgr/ceph-{{ ansible_facts['hostname'] }}"
+  register: ceph_mgr_dir
+  tags: [ceph, vmagent]
+
+# --- vmagent ---
+
+- name: Create the vmagent install directory
+  ansible.builtin.file:
+    path: "/opt/vmagent/{{ vmagent_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [vmagent]
+
+- name: Download vmutils
+  ansible.builtin.get_url:
+    url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/{{ vmagent_version }}/vmutils-linux-amd64-{{ vmagent_version }}.tar.gz"
+    dest: "/opt/vmagent/vmutils-linux-amd64-{{ vmagent_version }}.tar.gz"
+    checksum: "sha256:{{ vmagent_archive_sha256 }}"
+    mode: "0644"
+  tags: [vmagent]
+
+- name: Extract vmagent
+  ansible.builtin.unarchive:
+    src: "/opt/vmagent/vmutils-linux-amd64-{{ vmagent_version }}.tar.gz"
+    dest: "/opt/vmagent/{{ vmagent_version }}"
+    remote_src: true
+    include: [vmagent-prod]
+    creates: "/opt/vmagent/{{ vmagent_version }}/vmagent-prod"
+  tags: [vmagent]
+
+- name: Link the vmagent binary
+  ansible.builtin.file:
+    src: "/opt/vmagent/{{ vmagent_version }}/vmagent-prod"
+    dest: /usr/local/bin/vmagent
+    state: link
+  notify: restart vmagent
+  tags: [vmagent]
+
+- name: Create the vmagent config directory
+  ansible.builtin.file:
+    path: /etc/vmagent
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [vmagent]
+
+- name: Write the vmagent scrape config
+  ansible.builtin.template:
+    src: scrape.yml.j2
+    dest: /etc/vmagent/scrape.yml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload vmagent
+  tags: [vmagent]
+
+- name: Install the vmagent unit
+  ansible.builtin.template:
+    src: vmagent.service.j2
+    dest: /etc/systemd/system/vmagent.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart vmagent
+  tags: [vmagent]
+
+- name: Start vmagent
+  ansible.builtin.systemd:
+    name: vmagent
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [vmagent]

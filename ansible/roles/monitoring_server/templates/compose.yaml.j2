@@ -1,0 +1,31 @@
+# Managed by Ansible (role monitoring_server)
+name: monitoring
+
+services:
+  victoriametrics:
+    image: {{ victoriametrics_image }}
+    restart: unless-stopped
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod={{ victoriametrics_retention }}
+      - -httpListenAddr=:8428
+    ports:
+      - "127.0.0.1:8428:8428"
+      - "{{ victoriametrics_listen_address }}:8428:8428"
+    volumes:
+      - ./data/victoriametrics:/storage
+
+  grafana:
+    image: {{ grafana_image }}
+    restart: unless-stopped
+    depends_on:
+      - victoriametrics
+    env_file: grafana.env
+    environment:
+      GF_SERVER_ROOT_URL: {{ grafana_root_url }}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro

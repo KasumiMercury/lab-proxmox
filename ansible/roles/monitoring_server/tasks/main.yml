@@ -1,0 +1,82 @@
+---
+- name: Check Docker Compose
+  ansible.builtin.command: docker compose version
+  changed_when: false
+
+- name: Read the Tailscale node name
+  ansible.builtin.command: tailscale status --self --json
+  register: tailscale_self
+  changed_when: false
+  when: grafana_tailscale_serve | bool
+
+- name: Set the Grafana URL
+  ansible.builtin.set_fact:
+    grafana_root_url: >-
+      {{ ('https://' ~ ((tailscale_self.stdout | from_json).Self.DNSName | regex_replace('\.$', '')) ~ '/')
+         if grafana_tailscale_serve | bool else 'http://localhost:3000/' }}
+
+- name: Create the project directories
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}/{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: root
+    mode: "0755"
+  loop:
+    - { path: "" }
+    - { path: data/victoriametrics }
+    # The Grafana image runs as uid 472
+    - { path: data/grafana, owner: "472" }
+    - { path: grafana/provisioning/datasources }
+  loop_control:
+    label: "{{ monitoring_dir }}/{{ item.path }}"
+
+- name: Write the Grafana secrets
+  ansible.builtin.template:
+    src: grafana.env.j2
+    dest: "{{ monitoring_dir }}/grafana.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Provision the VictoriaMetrics data source
+  ansible.builtin.template:
+    src: datasources.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/victoriametrics.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart grafana
+
+- name: Write compose.yaml
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ monitoring_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start the monitoring stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    state: present
+    pull: missing
+
+- name: Publish Grafana on the tailnet
+  when: grafana_tailscale_serve | bool
+  block:
+    - name: Read the tailscale serve config
+      ansible.builtin.command: tailscale serve status --json
+      register: tailscale_serve
+      changed_when: false
+
+    - name: Serve Grafana over HTTPS
+      ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:3000
+      when: "'http://127.0.0.1:3000' not in tailscale_serve.stdout"
+
+- name: Show the Grafana URL
+  ansible.builtin.debug:
+    msg: >-
+      Grafana: {{ grafana_root_url }} (user admin, initial password in
+      ansible/artifacts/strix-grafana-admin-password)

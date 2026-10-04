@@ -1,0 +1,27 @@
+# Managed by Ansible (role pve_monitoring)
+[Unit]
+Description=vmagent (scrapes local exporters, pushes to VictoriaMetrics)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+StateDirectory=vmagent
+ExecStart=/usr/local/bin/vmagent \
+  -promscrape.config=/etc/vmagent/scrape.yml \
+  -remoteWrite.url={{ pve_monitoring_remote_write_url }} \
+  -remoteWrite.tmpDataPath=/var/lib/vmagent \
+  -remoteWrite.maxDiskUsagePerURL={{ vmagent_max_disk_usage }} \
+  -httpListenAddr=127.0.0.1:8429 \
+  -memory.allowedBytes={{ vmagent_memory_allowed }}
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
