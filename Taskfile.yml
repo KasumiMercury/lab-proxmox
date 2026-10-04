@@ -236,9 +236,16 @@ tasks:
     cmds:
       - |
         export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
+        # strix's Tailscale OAuth client secret is in inventory/host_vars/strix/vault.yml
+        OPTS=""
+        if [ -n "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ]; then
+          OPTS="--vault-password-file $ANSIBLE_VAULT_PASSWORD_FILE"
+        elif [ -f ../.vault_pass.txt ]; then
+          OPTS="--vault-password-file ../.vault_pass.txt"
+        fi
         # Static inventory (not generated from Terraform); strix needs its sudo password
         # Extra args after "--" go to ansible-playbook (e.g. -- --limit pve --tags vmagent)
-        ansible-playbook -i inventory/hosts.yml --ask-become-pass playbooks/setup-monitoring.yml {{.CLI_ARGS}}
+        ansible-playbook -i inventory/hosts.yml --ask-become-pass $OPTS playbooks/setup-monitoring.yml {{.CLI_ARGS}}
 
   ansible:test-connection:
     desc: Test Ansible connection to VMs
@@ -310,7 +317,8 @@ tasks:
           echo "Passwords do not match." >&2
           exit 1
         fi
-        umask 077
+        # Task's built-in shell has no umask: create the file as 0600 before writing the secret
+        install -m 0600 /dev/null .vault_pass.txt
         printf "%s\n" "$P" > .vault_pass.txt
         echo ".vault_pass.txt created with 0600 permissions."
 

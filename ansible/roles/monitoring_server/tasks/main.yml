@@ -3,17 +3,22 @@
   ansible.builtin.command: docker compose version
   changed_when: false
 
-- name: Read the Tailscale node name
+- name: Require the Tailscale OAuth client secret
+  ansible.builtin.assert:
+    that: tailscale_oauth_client_secret | length > 0
+    fail_msg: >-
+      vault_tailscale_oauth_client_secret is not set
+      (ansible-vault edit inventory/host_vars/strix/vault.yml)
+
+# The host itself is on the tailnet; its MagicDNS suffix names the sidecar node too
+- name: Read the tailnet DNS suffix
   ansible.builtin.command: tailscale status --self --json
   register: tailscale_self
   changed_when: false
-  when: grafana_tailscale_serve | bool
 
 - name: Set the Grafana URL
   ansible.builtin.set_fact:
-    grafana_root_url: >-
-      {{ ('https://' ~ ((tailscale_self.stdout | from_json).Self.DNSName | regex_replace('\.$', '')) ~ '/')
-         if grafana_tailscale_serve | bool else 'http://localhost:3000/' }}
+    grafana_root_url: "https://{{ grafana_tailscale_hostname }}.{{ (tailscale_self.stdout | from_json).MagicDNSSuffix }}/"
 
 - name: Create the project directories
   ansible.builtin.file:
@@ -30,6 +35,8 @@
     - { path: grafana/provisioning/datasources }
     - { path: grafana/provisioning/dashboards }
     - { path: grafana/dashboards }
+    - { path: tailscale/state }
+    - { path: tailscale/config }
   loop_control:
     label: "{{ monitoring_dir }}/{{ item.path }}"
 
@@ -83,6 +90,24 @@
   loop_control:
     label: "{{ item.item.file }}.json"
 
+- name: Write the Tailscale auth key
+  ansible.builtin.template:
+    src: tailscale.env.j2
+    dest: "{{ monitoring_dir }}/tailscale.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+# Picked up by the container without a restart (TS_SERVE_CONFIG is watched)
+- name: Write the Tailscale serve config
+  ansible.builtin.template:
+    src: serve.json.j2
+    dest: "{{ monitoring_dir }}/tailscale/config/serve.json"
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Write compose.yaml
   ansible.builtin.template:
     src: compose.yaml.j2
@@ -97,20 +122,16 @@
     state: present
     pull: missing
 
-- name: Publish Grafana on the tailnet
-  when: grafana_tailscale_serve | bool
-  block:
-    - name: Read the tailscale serve config
-      ansible.builtin.command: tailscale serve status --json
-      register: tailscale_serve
-      changed_when: false
+# Grafana used to be served by the host's tailscaled; the host is left for SSH only
+- name: Read the host's tailscale serve config
+  ansible.builtin.command: tailscale serve status --json
+  register: tailscale_host_serve
+  changed_when: false
 
-    - name: Serve Grafana over HTTPS
-      ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:3000
-      when: "'http://127.0.0.1:3000' not in tailscale_serve.stdout"
+- name: Stop serving Grafana from the host
+  ansible.builtin.command: tailscale serve --https=443 off
+  when: "'http://127.0.0.1:3000' in tailscale_host_serve.stdout"
 
 - name: Show the Grafana URL
   ansible.builtin.debug:
-    msg: >-
-      Grafana: {{ grafana_root_url }} (user admin, initial password in
-      ansible/artifacts/strix-grafana-admin-password)
+    msg: "Grafana: {{ grafana_root_url }}"

@@ -30,3 +30,17 @@ services:
       - ./data/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
+
+  # Publishes Grafana on the tailnet as {{ grafana_tailscale_hostname }} (serve config in tailscale/config)
+  tailscale:
+    image: {{ tailscale_image }}
+    restart: unless-stopped
+    env_file: tailscale.env
+    environment:
+      TS_HOSTNAME: {{ grafana_tailscale_hostname }}
+      TS_EXTRA_ARGS: --advertise-tags={{ tailscale_tags }}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ./tailscale/state:/var/lib/tailscale
+      - ./tailscale/config:/config:ro
