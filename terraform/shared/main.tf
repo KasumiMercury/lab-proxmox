@@ -31,6 +31,7 @@ module "proxmox_cloudinit" {
   cores             = each.value.cores
   cpu_type          = each.value.cpu_type
   memory            = each.value.memory
+  power_state       = each.value.power_state
   disk_size         = each.value.disk_size
   disk_storage      = each.value.disk_storage
   ip_address        = each.value.ip_address

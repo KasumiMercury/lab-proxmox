@@ -34,6 +34,16 @@ variable "cpu_type" {
   default     = "x86-64-v2-AES"
 }
 
+variable "power_state" {
+  description = "Power state Terraform keeps the VM in: running or stopped"
+  type        = string
+  default     = "running"
+  validation {
+    condition     = contains(["running", "stopped"], var.power_state)
+    error_message = "power_state must be running or stopped."
+  }
+}
+
 variable "memory" {
   description = "Amount of memory in MB"
   type        = number
