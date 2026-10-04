@@ -1,7 +1,8 @@
 ---
-# One network device (zabbix_snmp_host): created when missing, otherwise its SNMP interface,
-# host group and templates are brought in line. Other changes made in the UI are left alone.
-- name: Look up {{ zabbix_snmp_host.name }}
+# One host (zabbix_host): created when missing, otherwise its host group, templates, SNMP interface
+# (hosts with an ip) and the listed macros are brought in line. Other changes made in the UI are left alone.
+# Agent hosts have no interface: they only send active checks.
+- name: Look up {{ zabbix_host.name }}
   ansible.builtin.uri:
     url: "{{ zabbix_api_url }}"
     method: POST
@@ -13,28 +14,28 @@
       id: 1
       params:
         output: [hostid, name]
-        filter: { host: "{{ zabbix_snmp_host.name }}" }
+        filter: { host: "{{ zabbix_host.name }}" }
         selectInterfaces: [interfaceid, type, main, ip, port, details]
         selectHostGroups: [groupid]
         selectParentTemplates: [templateid]
-  register: zabbix_snmp_existing
-  failed_when: zabbix_snmp_existing.json.error is defined
+  register: zabbix_host_existing
+  failed_when: zabbix_host_existing.json.error is defined
 
-- name: Build the desired state of {{ zabbix_snmp_host.name }}
+- name: Build the desired state of {{ zabbix_host.name }}
   ansible.builtin.set_fact:
-    zabbix_snmp_templateids: >-
-      {{ zabbix_snmp_templates.json.result | selectattr('host', 'in', zabbix_snmp_host.templates)
+    zabbix_host_templateids: >-
+      {{ zabbix_host_templates.json.result | selectattr('host', 'in', zabbix_host.templates)
          | map(attribute='templateid') | sort }}
     zabbix_snmp_interface:
       type: 2
       main: 1
       useip: 1
-      ip: "{{ zabbix_snmp_host.ip }}"
+      ip: "{{ zabbix_host.ip | default('') }}"
       dns: ""
       port: "161"
       details: { version: 2, bulk: 1, community: "{$SNMP_COMMUNITY}" }
 
-- name: Create {{ zabbix_snmp_host.name }}
+- name: Create {{ zabbix_host.name }}
   ansible.builtin.uri:
     url: "{{ zabbix_api_url }}"
     method: POST
@@ -45,25 +46,25 @@
       method: host.create
       id: 1
       params:
-        host: "{{ zabbix_snmp_host.name }}"
-        name: "{{ zabbix_snmp_host.visible_name | default(zabbix_snmp_host.name) }}"
-        groups: [{ groupid: "{{ zabbix_snmp_groupid }}" }]
-        templates: "{{ zabbix_snmp_templateids | map('community.general.dict_kv', 'templateid') }}"
-        interfaces: "{{ [zabbix_snmp_interface] }}"
-        macros: "{{ zabbix_snmp_host.macros | default({}) | dict2items(key_name='macro', value_name='value') }}"
-  register: zabbix_snmp_create
-  failed_when: zabbix_snmp_create.json.error is defined
+        host: "{{ zabbix_host.name }}"
+        name: "{{ zabbix_host.visible_name | default(zabbix_host.name) }}"
+        groups: [{ groupid: "{{ zabbix_groupids[zabbix_host.group] }}" }]
+        templates: "{{ zabbix_host_templateids | map('community.general.dict_kv', 'templateid') }}"
+        interfaces: "{{ [zabbix_snmp_interface] if zabbix_host.ip is defined else [] }}"
+        macros: "{{ zabbix_host.macros | default({}) | dict2items(key_name='macro', value_name='value') }}"
+  register: zabbix_host_create
+  failed_when: zabbix_host_create.json.error is defined
   changed_when: true
-  when: zabbix_snmp_existing.json.result | length == 0
+  when: zabbix_host_existing.json.result | length == 0
 
-- name: Update {{ zabbix_snmp_host.name }}
-  when: zabbix_snmp_existing.json.result | length > 0
+- name: Update {{ zabbix_host.name }}
+  when: zabbix_host_existing.json.result | length > 0
   vars:
-    current: "{{ zabbix_snmp_existing.json.result[0] }}"
+    current: "{{ zabbix_host_existing.json.result[0] }}"
     current_snmp: "{{ current.interfaces | selectattr('type', 'equalto', '2') | selectattr('main', 'equalto', '1') | list }}"
   block:
     # host.update replaces the linked templates (unlinking the others, keeping their items)
-    - name: Update the host group and templates of {{ zabbix_snmp_host.name }}
+    - name: Update the host group and templates of {{ zabbix_host.name }}
       ansible.builtin.uri:
         url: "{{ zabbix_api_url }}"
         method: POST
@@ -75,16 +76,16 @@
           id: 1
           params:
             hostid: "{{ current.hostid }}"
-            groups: "{{ (current.hostgroups | map(attribute='groupid') | list + [zabbix_snmp_groupid]) | unique | map('community.general.dict_kv', 'groupid') }}"
-            templates: "{{ zabbix_snmp_templateids | map('community.general.dict_kv', 'templateid') }}"
-      register: zabbix_snmp_update
-      failed_when: zabbix_snmp_update.json.error is defined
+            groups: "{{ (current.hostgroups | map(attribute='groupid') | list + [zabbix_groupids[zabbix_host.group]]) | unique | map('community.general.dict_kv', 'groupid') }}"
+            templates: "{{ zabbix_host_templateids | map('community.general.dict_kv', 'templateid') }}"
+      register: zabbix_host_update
+      failed_when: zabbix_host_update.json.error is defined
       changed_when: true
       when: >-
-        zabbix_snmp_groupid not in current.hostgroups | map(attribute='groupid')
-        or current.parentTemplates | map(attribute='templateid') | sort != zabbix_snmp_templateids
+        zabbix_groupids[zabbix_host.group] not in current.hostgroups | map(attribute='groupid')
+        or current.parentTemplates | map(attribute='templateid') | sort != zabbix_host_templateids
 
-    - name: Create the SNMP interface of {{ zabbix_snmp_host.name }}
+    - name: Create the SNMP interface of {{ zabbix_host.name }}
       ansible.builtin.uri:
         url: "{{ zabbix_api_url }}"
         method: POST
@@ -94,9 +95,9 @@
       register: zabbix_snmp_interface_create
       failed_when: zabbix_snmp_interface_create.json.error is defined
       changed_when: true
-      when: current_snmp | length == 0
+      when: zabbix_host.ip is defined and current_snmp | length == 0
 
-    - name: Update the SNMP interface of {{ zabbix_snmp_host.name }}
+    - name: Update the SNMP interface of {{ zabbix_host.name }}
       ansible.builtin.uri:
         url: "{{ zabbix_api_url }}"
         method: POST
@@ -111,27 +112,27 @@
       failed_when: zabbix_snmp_interface_update.json.error is defined
       changed_when: true
       when: >-
-        current_snmp | length > 0
-        and (current_snmp[0].ip != zabbix_snmp_host.ip or current_snmp[0].port != '161'
+        zabbix_host.ip is defined and current_snmp | length > 0
+        and (current_snmp[0].ip != zabbix_host.ip or current_snmp[0].port != '161'
              or current_snmp[0].details.version != '2' or current_snmp[0].details.community != '{$SNMP_COMMUNITY}')
 
 # Host macros of existing hosts (new hosts got them in host.create)
-- name: Set the host macros of {{ zabbix_snmp_host.name }}
-  when: zabbix_snmp_existing.json.result | length > 0 and zabbix_snmp_host.macros | default({}) | length > 0
+- name: Set the host macros of {{ zabbix_host.name }}
+  when: zabbix_host_existing.json.result | length > 0 and zabbix_host.macros | default({}) | length > 0
   vars:
-    hostid: "{{ zabbix_snmp_existing.json.result[0].hostid }}"
+    hostid: "{{ zabbix_host_existing.json.result[0].hostid }}"
   block:
-    - name: Look up the host macros of {{ zabbix_snmp_host.name }}
+    - name: Look up the host macros of {{ zabbix_host.name }}
       ansible.builtin.uri:
         url: "{{ zabbix_api_url }}"
         method: POST
         body_format: json
         headers: "{{ zabbix_api_headers }}"
         body: { jsonrpc: "2.0", method: usermacro.get, id: 1, params: { output: [hostmacroid, macro, value], hostids: ["{{ hostid }}"] } }
-      register: zabbix_snmp_macros
-      failed_when: zabbix_snmp_macros.json.error is defined
+      register: zabbix_host_macros
+      failed_when: zabbix_host_macros.json.error is defined
 
-    - name: Create or update the host macros of {{ zabbix_snmp_host.name }}
+    - name: Create or update the host macros of {{ zabbix_host.name }}
       ansible.builtin.uri:
         url: "{{ zabbix_api_url }}"
         method: POST
@@ -144,12 +145,12 @@
           params: >-
             {{ {'value': item.value}
                | combine({'hostmacroid': current[0].hostmacroid} if current else {'hostid': hostid, 'macro': item.key}) }}
-      register: zabbix_snmp_macro_set
-      failed_when: zabbix_snmp_macro_set.json.error is defined
+      register: zabbix_host_macro_set
+      failed_when: zabbix_host_macro_set.json.error is defined
       changed_when: true
       when: current | length == 0 or current[0].value != item.value | string
       vars:
-        current: "{{ zabbix_snmp_macros.json.result | selectattr('macro', 'equalto', item.key) | list }}"
-      loop: "{{ zabbix_snmp_host.macros | dict2items }}"
+        current: "{{ zabbix_host_macros.json.result | selectattr('macro', 'equalto', item.key) | list }}"
+      loop: "{{ zabbix_host.macros | dict2items }}"
       loop_control:
         label: "{{ item.key }}"

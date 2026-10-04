@@ -248,7 +248,7 @@ tasks:
         ansible-playbook -i inventory/hosts.yml --ask-become-pass $OPTS playbooks/setup-monitoring.yml {{.CLI_ARGS}}
 
   zabbix:setup:
-    desc: Set up Zabbix with TimescaleDB on strix (network devices over SNMP)
+    desc: Set up Zabbix with TimescaleDB on strix (network devices over SNMP, agent 2 on the Proxmox nodes)
     aliases: [zbx:setup]
     dir: ansible
     deps:

@@ -44,6 +44,7 @@ zabbix_api_url: http://127.0.0.1:8080/api_jsonrpc.php
 # Templates in files/templates, imported (created/updated, removed parts deleted) before the hosts are linked
 zabbix_own_templates:
   - alliedtelesis_awplus_environment.yaml
+  - linux_lmsensors_active.yaml
 # Templates deleted from Zabbix when present, together with what they created on the hosts.
 # "Cisco IOS by SNMP" already watches ciscoEnvMonTemperatureState; this one only duplicated it.
 zabbix_removed_templates:
@@ -77,3 +78,15 @@ zabbix_snmp_hosts:
     visible_name: AT-x210-16GT
     ip: 192.168.10.2
     templates: [Network Generic Device by SNMP, Allied Telesis AlliedWare Plus environment by SNMP]
+
+# Hosts running Zabbix agent 2 (role zabbix_agent) with active checks only: the router lets
+# 192.168.20.0/24 reach strix (trapper port published on lan_address) but not the other way round.
+# Registered without interfaces; the agent's Hostname is the inventory name. Linux only; the rest of
+# the Proxmox metrics stay in VictoriaMetrics / Grafana.
+zabbix_agent_hosts: "{{ groups['pve'] | default([]) }}"
+zabbix_agent_host_group: Hypervisors
+zabbix_agent_templates: [Linux by Zabbix agent active, Linux lm-sensors by Zabbix agent active]
+zabbix_agent_macros:
+  # Template default plus the Proxmox guest and firewall bridge interfaces
+  "{$NET.IF.IFNAME.NOT_MATCHES}": >-
+    (^Software Loopback Interface|^NULL[0-9.]*$|^[Ll]o[0-9.]*$|^[Ss]ystem$|^Nu[0-9.]*$|^veth[0-9A-z]+$|docker[0-9]+|br-[a-z0-9]{12}|^(tap|fwbr|fwpr|fwln)[0-9]+)

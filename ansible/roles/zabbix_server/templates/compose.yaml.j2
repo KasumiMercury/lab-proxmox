@@ -35,6 +35,9 @@ services:
     environment:
       DB_SERVER_HOST: timescaledb
       ENABLE_TIMESCALEDB: "true"
+    # Trapper port for the active agents on the Proxmox nodes
+    ports:
+      - "{{ lan_address }}:10051:10051"
     volumes:
       - ./data/snmptraps:/var/lib/zabbix/snmptraps
       - ./data/export:/var/lib/zabbix/export

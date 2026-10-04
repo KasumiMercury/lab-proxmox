@@ -1,0 +1,12 @@
+---
+# Major series of the Zabbix repository; keep it in step with zabbix_version of the zabbix_server role
+zabbix_agent_series: "7.4"
+zabbix_agent_repo_url: "https://repo.zabbix.com/zabbix/{{ zabbix_agent_series }}/stable/debian"
+# Same key as /usr/share/keyrings/zabbix.gpg of zabbix-release (4C3D 6F2C ... B533 3005)
+zabbix_agent_repo_key_url: https://repo.zabbix.com/zabbix-official-repo-apr2024.gpg
+
+# Active checks only: the router lets the nodes (192.168.20.0/24) reach strix but not the other way
+# round, so the agent connects to the server's trapper port and nothing polls the agent.
+zabbix_agent_server: "{{ hostvars['strix'].lan_address }}"
+# Must match the host name registered by the zabbix_server role
+zabbix_agent_hostname: "{{ inventory_hostname }}"
