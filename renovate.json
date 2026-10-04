@@ -49,13 +49,6 @@
       "groupName": "VictoriaMetrics"
     },
     {
-      "description": "tflint in mise.toml (local, lefthook) and in the plan workflow (setup-tflint) move together",
-      "matchPackageNames": [
-        "terraform-linters/tflint"
-      ],
-      "groupName": "tflint"
-    },
-    {
       "description": "Name dashboard PRs after the provisioned file and the grafana.com ID",
       "matchDatasources": [
         "custom.grafana-dashboards"
