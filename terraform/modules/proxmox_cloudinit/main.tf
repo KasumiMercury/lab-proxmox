@@ -70,6 +70,19 @@ resource "proxmox_vm_qemu" "basic_cloudinit" {
     firewall = true
   }
 
+  # Explicit, so the provider moves the state from the deprecated vm_state (kept on refresh while
+  # power_state is unset) to power_state; running is what an unset value meant anyway
+  power_state = "running"
+
+  # The provider (since 3.0.2-rc07) reads an unset startup/shutdown config back as this block of -1s
+  # ("any"/"default"), so leaving it out shows a removal on every plan
+  # (https://github.com/Telmate/terraform-provider-proxmox/issues/1495)
+  startup_shutdown {
+    order            = -1
+    shutdown_timeout = -1
+    startup_delay    = -1
+  }
+
   # Optional: attach cloud-init custom user-data snippet
   # e.g., var.cicustom = "user=local:snippets/ansible-user.yml"
   # This can configure NOPASSWD sudo and disable SSH password auth.
