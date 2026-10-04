@@ -1,7 +1,7 @@
 [tools]
 terraform = "1.16.5"
 kubectl = "1.37.1"
-task = "3.53.1"
+task = "3.54.0"
 jq = "1.8.2"
 lefthook = "2.1.16"
 tflint = "0.57.0"
