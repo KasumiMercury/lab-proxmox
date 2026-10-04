@@ -14,5 +14,7 @@ virtual_machines = {
     network_bridge = "vmbr100"
     network_tag    = 0
     disk_size      = 32
+    # Kept off: hod has little memory to spare (start it by hand or set "running" when testing)
+    power_state = "stopped"
   }
 }

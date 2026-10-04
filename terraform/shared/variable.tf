@@ -31,6 +31,8 @@ variable "virtual_machines" {
     network_tag    = optional(number, 0)
     disk_size      = optional(number, 32)
     disk_storage   = optional(string, "local-lvm")
+    # "stopped" keeps the VM shut down (applies stop it as well)
+    power_state = optional(string, "running")
     # Ansible role of the VM; non-empty values become inventory groups "<env>_<role>" (e.g. k8s_control_plane)
     role = optional(string, "")
   }))
