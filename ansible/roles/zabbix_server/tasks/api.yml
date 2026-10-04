@@ -165,6 +165,29 @@
       {{ zabbix_snmp_group.json.result[0].groupid if zabbix_snmp_group.json.result | length > 0
          else zabbix_snmp_group_create.json.result.groupids[0] }}
 
+- name: Look up removed templates
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: template.get, id: 1, params: { output: [templateid, host], filter: { host: "{{ zabbix_removed_templates }}" } } }
+  register: zabbix_removed_lookup
+  failed_when: zabbix_removed_lookup.json.error is defined
+
+# template.delete also removes the items, triggers and discovered entities it created on linked hosts
+- name: Delete removed templates
+  ansible.builtin.uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    body_format: json
+    headers: "{{ zabbix_api_headers }}"
+    body: { jsonrpc: "2.0", method: template.delete, id: 1, params: "{{ zabbix_removed_lookup.json.result | map(attribute='templateid') }}" }
+  register: zabbix_removed_delete
+  failed_when: zabbix_removed_delete.json.error is defined
+  changed_when: true
+  when: zabbix_removed_lookup.json.result | length > 0
+
 # Own templates (files/templates), compared first so unchanged ones are not re-imported
 - name: Compare the own templates with Zabbix
   ansible.builtin.uri:

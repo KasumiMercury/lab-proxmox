@@ -50,6 +50,7 @@
         groups: [{ groupid: "{{ zabbix_snmp_groupid }}" }]
         templates: "{{ zabbix_snmp_templateids | map('community.general.dict_kv', 'templateid') }}"
         interfaces: "{{ [zabbix_snmp_interface] }}"
+        macros: "{{ zabbix_snmp_host.macros | default({}) | dict2items(key_name='macro', value_name='value') }}"
   register: zabbix_snmp_create
   failed_when: zabbix_snmp_create.json.error is defined
   changed_when: true
@@ -113,3 +114,42 @@
         current_snmp | length > 0
         and (current_snmp[0].ip != zabbix_snmp_host.ip or current_snmp[0].port != '161'
              or current_snmp[0].details.version != '2' or current_snmp[0].details.community != '{$SNMP_COMMUNITY}')
+
+# Host macros of existing hosts (new hosts got them in host.create)
+- name: Set the host macros of {{ zabbix_snmp_host.name }}
+  when: zabbix_snmp_existing.json.result | length > 0 and zabbix_snmp_host.macros | default({}) | length > 0
+  vars:
+    hostid: "{{ zabbix_snmp_existing.json.result[0].hostid }}"
+  block:
+    - name: Look up the host macros of {{ zabbix_snmp_host.name }}
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        body_format: json
+        headers: "{{ zabbix_api_headers }}"
+        body: { jsonrpc: "2.0", method: usermacro.get, id: 1, params: { output: [hostmacroid, macro, value], hostids: ["{{ hostid }}"] } }
+      register: zabbix_snmp_macros
+      failed_when: zabbix_snmp_macros.json.error is defined
+
+    - name: Create or update the host macros of {{ zabbix_snmp_host.name }}
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        body_format: json
+        headers: "{{ zabbix_api_headers }}"
+        body:
+          jsonrpc: "2.0"
+          method: "{{ 'usermacro.update' if current else 'usermacro.create' }}"
+          id: 1
+          params: >-
+            {{ {'value': item.value}
+               | combine({'hostmacroid': current[0].hostmacroid} if current else {'hostid': hostid, 'macro': item.key}) }}
+      register: zabbix_snmp_macro_set
+      failed_when: zabbix_snmp_macro_set.json.error is defined
+      changed_when: true
+      when: current | length == 0 or current[0].value != item.value | string
+      vars:
+        current: "{{ zabbix_snmp_macros.json.result | selectattr('macro', 'equalto', item.key) | list }}"
+      loop: "{{ zabbix_snmp_host.macros | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
