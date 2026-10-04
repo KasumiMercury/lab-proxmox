@@ -43,7 +43,7 @@ tailscale_tags: tag:strix
 # side of the nodes (CPU, memory, file systems, temperatures, agent down) and the network devices,
 # so these cover what only the metrics here show: the Proxmox cluster, Ceph and the metric pipeline.
 grafana_slack_bot_token: "{{ vault_slack_bot_token | default('') }}"
-grafana_slack_channel: "#grafana"
+grafana_slack_channel: "#pve-alert"
 # Guests (Proxmox name, regex) expected to be running; the others are started and stopped by hand
 grafana_alert_running_guests: k8s-.*|gnosis|athanor
 # Used share of a Proxmox storage / of a Ceph pool (its max_avail already accounts for replication)
