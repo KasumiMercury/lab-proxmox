@@ -159,6 +159,17 @@
       ansible.builtin.command: ceph mgr module enable prometheus
       when: "'prometheus' not in (ceph_mgr_modules.stdout | from_json).enabled_modules"
 
+    # Since Reef the module leaves daemon perf counters (OSD ops/latency) to ceph-exporter, which
+    # only cephadm deploys. Without them the Ceph dashboard has no I/O panels.
+    - name: Read whether the module excludes perf counters
+      ansible.builtin.command: ceph config get mgr mgr/prometheus/exclude_perf_counters
+      register: ceph_prom_exclude_perf
+      changed_when: false
+
+    - name: Export perf counters from the mgr
+      ansible.builtin.command: ceph config set mgr mgr/prometheus/exclude_perf_counters false
+      when: ceph_prom_exclude_perf.stdout | trim | bool
+
 - name: Check whether this node runs a Ceph mgr
   ansible.builtin.stat:
     path: "/var/lib/ceph/mgr/ceph-{{ ansible_facts['hostname'] }}"
