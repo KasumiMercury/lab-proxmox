@@ -5,5 +5,5 @@ task = "3.54.0"
 jq = "1.8.2"
 lefthook = "2.1.16"
 tflint = "0.64.0"
-trivy = "0.74.0"
+trivy = "0.75.0"
 "pipx:ansible" = { version = "14.4.0", uvx_args = "--with-executables-from ansible-core", pipx_args = "--include-deps" }
