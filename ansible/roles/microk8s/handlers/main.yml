@@ -1,3 +1,0 @@
----
-- name: restart microk8s containerd
-  ansible.builtin.command: snap restart microk8s.daemon-containerd

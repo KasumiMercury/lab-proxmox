@@ -26,48 +26,46 @@ Ansible tasks (`ans:ping`, `ans:run`, `ans:setup`, `deploy`) also depend on `ssh
 - Key path: `SSH_KEY_FILE` (default `~/.ssh/id_ed25519`; `ANSIBLE_PRIVATE_KEY_FILE` is honored as well). Put the matching `.pub` next to it, or the task derives it once
 - `task ssh:agent-stop` stops the fixed-socket agent. Skipped automatically when `ANSIBLE_USE_PASSWORDS=true`
 
-Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:destroy` `tf:output` `tf:passwords` `tf:encrypt` `tf:decrypt` `ans:inventory` `ans:ping` `ans:run` `ans:setup` `ans:vault-hostvars` `ssh:key` `pve:snippet` `argocd:password` `argocd:port-forward`
+Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:destroy` `tf:output` `tf:passwords` `tf:encrypt` `tf:decrypt` `ans:inventory` `ans:ping` `ans:run` `ans:setup` `ans:vault-hostvars` `ssh:key` `pve:snippet` `pve:talos-template` `argocd:password` `argocd:port-forward`
 
 ## Kubernetes (k8s environment)
-`task deploy TF_ENV=k8s` creates the three VMs and builds a MicroK8s cluster: `k8s-hod` is the control plane, `k8s-netzach` and `k8s-yesod` are workers.
-- Roles come from `role` in `terraform/environments/k8s/k8s.auto.tfvars` (`control-plane` / `worker`) and become the inventory groups `k8s_control_plane` / `k8s_worker`
-- Playbook: `ansible/playbooks/setup-k8s.yml` (baseline for all VMs, then role `microk8s`). Channel and addons are set in `ansible/roles/microk8s/defaults/main.yml` (default `1.36/stable`, addon `dns`)
-- CNI is Cilium, bootstrapped with the bundled `microk8s helm3` on the control plane before workers join (the default Calico is removed). Ansible installs it only on a fresh cluster and never touches an existing installation; every later change (version, custom builds, features) is managed by ArgoCD. Set `microk8s_cni: calico` to keep the MicroK8s default
-- Cilium runs as kube-proxy replacement from the start (`kubeProxyReplacement: true`, API via `127.0.0.1:16443` on every node). MicroK8s has no switch for kube-proxy, so Ansible starts it with `--init-only` (it applies its node sysctls, programs no rules and exits; kubelite keeps running) and rolls the change back automatically if kubelite does not stay up
-- Every node first runs as a standalone MicroK8s with Calico and kube-proxy, which leaves the `vxlan.calico` device, Calico routes and iptables rules (legacy and nft) behind. After the workers join, Ansible checks each node in turn and reboots it when any of these are found
-- Cilium has Gateway API support enabled (`gatewayAPI.enabled` in `cilium/values.yaml`). The Gateway API CRDs (version in `cilium/gateway-api.yaml`) are applied right before Cilium, because the operator only enables it when they exist at startup
+The k8s environment is a Talos Linux cluster: `k8s-hod` is the control plane (it also runs workloads), `k8s-netzach` and `k8s-yesod` are workers. Terraform creates the VMs and configures Talos; there is no Ansible and no SSH on the nodes (use `talosctl`).
+- Root module: `terraform/environments/k8s` (`k8s.auto.tfvars`) calls `terraform/modules/talos_cluster`, which clones the VMs from the template `talos-template`, applies the machine configs over the Talos API (the clones boot into maintenance mode with the static IP from the cloud-init drive), bootstraps etcd and returns the kubeconfig and talosconfig. Exactly one node has `role = "controlplane"`; the API endpoint is its address
+- Versions: `talos_version`, `kubernetes_version` and `schematic_id` in `k8s.auto.tfvars` (Talos v1.14.2, Kubernetes 1.37.1). The schematic is the Image Factory schematic with the `siderolabs/qemu-guest-agent` extension; the template and the installer image both come from it
+- Machine config patches: `terraform/modules/talos_cluster/patches/` (`common.yaml.tftpl` for every node, `controlplane.yaml`). They disable Flannel and kube-proxy (Cilium replaces both), set the pod and Service subnets (`10.1.0.0/16` / `10.152.183.0/24`; Talos' default Service CIDR overlaps the Gateway LB pool in lab-argo), stop CoreDNS from forwarding to the host DNS (it breaks Cilium's eBPF host routing), ship the service and kernel logs to Alloy on `127.0.0.1:6050/6051`, expose the controller-manager, scheduler and etcd metrics, and enforce no Pod Security level (as on MicroK8s; the CSI node plugins, Alloy and the Tailscale proxies need host access)
+- VM settings follow the Talos Proxmox guide: VirtIO SCSI (not "single"), ballooning off, CPU type `x86-64-v3` (some images such as ceph-csi 3.18 need it), QEMU guest agent on
+- Ceph RBD volumes use the kernel client (krbd): Talos 1.14.1+ carries the backport for the aes256k cephx keys that Ceph 19.2.6+ issues
 - Cilium chart pin and values live in `cilium/` (`version.yaml`, `values.yaml`), a git submodule of [lab-cilium](https://github.com/KasumiMercury/lab-cilium) shared with the ArgoCD repo; run `git submodule update --init` after cloning. See `cilium/README.md` for the contract
-- Node-to-node ports: 16443 (API), 25000 (join), 10250 (kubelet), 8472/udp (Cilium VXLAN), 4240 (Cilium health). The VMs' NICs have the Proxmox firewall flag set, so keep the VM firewall disabled or allow these
 - Control plane VM has 8192 MB (`memory` in `k8s.auto.tfvars`), workers 4096 MB
-- The VMs use the CPU type `x86-64-v3` (supported by all three hosts); some images (ceph-csi 3.18) need it
-- The nodes run the noble HWE kernel (`microk8s_kernel_package`, 7.0): Ceph 19.2.6+ issues aes256k cephx keys, which the kernel RBD client only supports from Linux 7.0. A node is rebooted (one at a time, after the workers joined) when a newer kernel is installed than the one running
-- Per-VM options in `virtual_machines` (`<env>.auto.tfvars`): `cores`, `cpu_type` (default `x86-64-v2-AES`; `host` exposes the full CPU), `memory`, `disk_size`, `disk_storage`, `network_bridge`, `network_tag`, `role`, `power_state` (`running` by default; `stopped` keeps the VM shut down and every apply stops it, e.g. the test VM)
-- The kubeconfig is fetched to `ansible/artifacts/k8s.kubeconfig` (gitignored): `export KUBECONFIG=$PWD/ansible/artifacts/k8s.kubeconfig && kubectl get nodes`
-- Re-running the playbook is safe: nodes already in the cluster are not joined again
-- ArgoCD is bootstrapped last (role `argocd`, chart `argo/argo-cd` 10.8.1 = Argo CD v3.5.2) only when it is absent; afterwards it is managed from the ArgoCD repository. The root Application is applied with `task bootstrap` in the ArgoCD repository. `task argocd:password TF_ENV=k8s` prints the initial admin password, `task argocd:port-forward TF_ENV=k8s` exposes the UI at `http://localhost:8080`. On the tailnet it is at `https://argocd.<tailnet>.ts.net` (Tailscale Ingress in the ArgoCD repository, which terminates TLS; argocd-server runs with `server.insecure`)
+- `terraform/environments/k8s-test` is a single-node cluster on yesod (VM 919, `192.168.110.199`) with the same module and patches, for trying changes first. Destroy it when done
+
+### Template
+`task proxmox:talos-template` creates the template (VM 9001, `talos-template`) on the shared storage `ceph-rbd` from the Image Factory nocloud image, through root SSH to hod. It does nothing when VM 9001 exists; to move to a new Talos version or schematic, delete the template, run the task with `TALOS_VERSION=` / `SCHEMATIC=`, and update `k8s.auto.tfvars`. Running nodes are upgraded with `talosctl upgrade --image factory.talos.dev/nocloud-installer/<schematic>:<version>` instead.
+
+The template lives on RBD rather than `strix0`: the Telmate provider reuses a file storage's volume name (`<vmid>/<file>.raw`) when it moves the clone to `local-lvm`, and fails.
 
 ### Setup
 Prerequisites:
 - [lab-argo](https://github.com/KasumiMercury/lab-argo): Argo CD reads it from GitHub, not from a local checkout. Clone it next to this repository (`../lab-argo`) with `--recurse-submodules`
 - The NAS export `192.168.110.5:/nfs/k8s` allows the k8s VM subnet `192.168.110.0/24` with `no_root_squash` (backs the `nfs-csi` StorageClass in lab-argo)
-- The VM SSH key is the one in `credentials_vm.ssh_key` (loaded by `ssh:agent`), and the environment variables above are set
+- Tools from `mise.toml` (`talosctl`, `helm`, `yq`, `kubectl`), and the environment variables above
 
 Steps (from this repository unless noted):
-1. `git submodule update --init` (checks out `cilium/`; the playbook reads the Cilium pin and values from it)
-2. `task tf:decrypt -- terraform/environments/k8s` (first time / after `*.gpg` changed)
-3. `task tf:plan TF_ENV=k8s`: expect the three VMs and their passwords to be added
-4. `task deploy TF_ENV=k8s`: creates the VMs, generates `ansible/inventory/k8s.ini` and runs `setup-k8s.yml` (MicroK8s, Cilium, worker joins, Argo CD). The kubeconfig lands in `ansible/artifacts/k8s.kubeconfig`
+1. `git submodule update --init` (checks out `cilium/`; the bootstrap reads the Cilium pin and values from it)
+2. `task proxmox:talos-template` (once)
+3. `task tf:plan TF_ENV=k8s`, then `task tf:apply TF_ENV=k8s`: creates the VMs, installs Talos and bootstraps etcd. The nodes stay NotReady until Cilium runs
+4. `task k8s:bootstrap TF_ENV=k8s`: writes `ansible/artifacts/k8s.kubeconfig` and `k8s.talosconfig` (`task k8s:config`), then runs `kubernetes/bootstrap.sh`: Gateway API CRDs, Cilium, and Argo CD (`kubernetes/argocd.yaml`, chart pin and bootstrap values). Each step is skipped when its result exists, so it can be rerun. `SEALED_SECRETS_KEY=<file>` applies an exported sealed-secrets key before Argo CD starts, so the SealedSecrets committed in lab-argo decrypt without resealing
 5. Check the cluster:
    ```bash
-   export KUBECONFIG=$PWD/ansible/artifacts/k8s.kubeconfig
+   export KUBECONFIG=$PWD/ansible/artifacts/k8s.kubeconfig TALOSCONFIG=$PWD/ansible/artifacts/k8s.talosconfig
    kubectl get nodes -o wide                                  # all three Ready
-   kubectl -n kube-system exec ds/cilium -- cilium-dbg status --brief
+   talosctl -n 192.168.110.181 health
    kubectl -n kube-system exec ds/cilium -- cilium-dbg status | grep KubeProxyReplacement   # True
    ```
-6. In lab-argo: `task bootstrap` (applies the root app-of-apps `bootstrap/root.yaml`; lab-argo's Taskfile uses the same kubeconfig by default). Watch with `task argocd:port-forward TF_ENV=k8s` and `task argocd:password TF_ENV=k8s`. The components sync in waves: cilium and argocd (adopted), sealed-secrets and csi-driver-nfs, tailscale, kube-prometheus-stack
-7. In lab-argo, once `sealed-secrets` is Healthy: `task seal:tailscale` and `task seal:grafana`, then commit and push. The Tailscale operator (and everything after it) waits for these Secrets
+6. In lab-argo: `task bootstrap` (applies the root app-of-apps `bootstrap/root.yaml`; lab-argo's Taskfile uses the same kubeconfig by default). `task argocd:password TF_ENV=k8s` prints the initial admin password, `task argocd:port-forward TF_ENV=k8s` exposes the UI at `http://localhost:8080`; on the tailnet it is at `https://argocd.<tailnet>.ts.net`
+7. Without a restored key, seal the credentials again in lab-argo once `sealed-secrets` is Healthy (`task seal:*`, see its README)
 
-If a step fails, re-running `task ans:run TF_ENV=k8s` is safe. Cilium and Argo CD are only installed when absent, so a broken first install has to be removed by hand (`microk8s helm3 uninstall ...`) before re-running.
+Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`), or in Grafana as `{namespace="talos"}`. A shell on a node: `kubectl debug node/<name> -it --profile=sysadmin --image=nicolaka/netshoot` (the host filesystem is under `/host`; Talos has no shell of its own).
 
 ## Samba (samba environment)
 `task deploy TF_ENV=samba` creates the unprivileged LXC `gnosis` (VMID 101) on yesod and sets up Samba (`ansible/playbooks/setup-samba.yml`, role `samba`).
@@ -109,14 +107,14 @@ If a step fails, re-running `task ans:run TF_ENV=k8s` is safe. Cilium and Argo C
 
 ## Terraform Layout
 - `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
-- `terraform/environments/<env>/`: symlinks to `shared/*.tf` plus `<env>.auto.tfvars`, `<env>_credential.auto.tfvars.json(.gpg)`, `.terraform.lock.hcl`
+- `terraform/environments/<env>/`: symlinks to `shared/*.tf` plus `<env>.auto.tfvars`, `<env>_credential.auto.tfvars.json(.gpg)`, `.terraform.lock.hcl`. `k8s` has its own root module for Talos (`terraform/modules/talos_cluster`), and `k8s-test` links to it
 - VMs get the Proxmox tags `<env>` (directory name), their `role` (if set) and `terraform`
 - State key is set at init: `terraform init -backend-config="key=proxmox/<env>/terraform.tfstate"` (`task terraform:init` does this)
 - Backend is Cloudflare R2 (S3-compatible); endpoint and credentials come from `AWS_*` env vars
 - To add an environment: create the directory, symlink the four `shared/*.tf` files, add tfvars. On Windows enable `git config core.symlinks true` before checkout
 
 ## Settings
-- `TF_ENV`: environment name (`test`, `k8s`). Default `test`
+- `TF_ENV`: environment name (`test`, `k8s`, `k8s-test`). Default `test`
 - `ANSIBLE_USE_PASSWORDS`: write passwords into inventory (default `false`)
 - `SSH_KEY_FILE` / `ANSIBLE_PRIVATE_KEY_FILE`: SSH private key loaded by `ssh:agent`, e.g. `~/.ssh/id_ed25519`
 - `ANSIBLE_VAULT_PASSWORD_FILE`: path to vault password file, e.g. `.vault_pass.txt`
@@ -139,7 +137,7 @@ If a step fails, re-running `task ans:run TF_ENV=k8s` is safe. Cilium and Argo C
 - Keep decrypted tfvars outside git; commit only `*.tfvars.json.gpg` (`*.tfvars.json` is gitignored)
 - Encrypt: `task -d terraform encrypt -- terraform/environments/<env>` → `*.tfvars.json.gpg`
 - Decrypt: `task -d terraform decrypt -- terraform/environments/<env>` → `*.tfvars.json` (0600, overwrites existing)
-- Single file: `task -d terraform gpg-decrypt-file -- terraform/environments/k8s/k8s_credential.auto.tfvars.json.gpg`
+- Single file: `task -d terraform gpg-decrypt-file -- terraform/environments/test/test_credential.auto.tfvars.json.gpg`
 - `task ansible:vault-passfile` → `.vault_pass.txt` (gitignored)
 - `task ansible:vault-hostvars-generate TF_ENV=test` → encrypted `ansible/inventory/host_vars/<vm>/vault.yml`
 - No-password inventory: `ANSIBLE_USE_PASSWORDS=false task ansible:generate-inventory TF_ENV=test`

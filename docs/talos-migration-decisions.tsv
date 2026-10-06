@@ -1,0 +1,16 @@
+date	what	why	evidence	result
+2026-10-06	Talos 1.14.2 + k8s 1.37.1	最新安定版（Talos の既定 k8s）	talos v1.14.2 リリースノート: Linux 6.18.54, Kubernetes 1.37.1	採用
+2026-10-06	ceph-csi を rbd-nbd でマウント	Linux 6.18 の krbd は Ceph 19.2.6 の aes256k 鍵を扱えない	旧ノードは HWE 7.0 カーネルで krbd を使用中	撤回
+2026-10-06	Pod/Service CIDR を MicroK8s と同じ 10.1.0.0/16 / 10.152.183.0/24	Talos 既定の Service CIDR 10.96.0.0/12 が Gateway の LB プール 10.100.0.0/28 と重なる	lab-argo platform/public-gateway/values.yaml	採用
+2026-10-06	新 VM は 811/821/831・.191〜.193、旧 VM は停止して残す	切り替え失敗時に旧 VM を起動するだけで戻せるようにする	ホストのメモリは新旧同時起動に足りない（hod 11.3/15.4G 使用）	撤回
+2026-10-06	旧 VM を削除し VMID 810/820/830・IP .181〜.183 を再利用	ユーザーが旧クラスタの先行削除を了承。kubeconfig や inventory の変更が減る	ユーザー指示（k8s 以外の VM には触れない）	採用
+2026-10-06	control plane 1 + worker 2（現状と同じ）	worker の 4G に etcd と apiserver を載せる余裕がない	現状は hod のみ control plane（microk8s join --worker）	採用
+2026-10-06	検証は yesod の VM 919（.199）	yesod が一番メモリに余裕がある（7.9/13.5G）	PVE API	採用
+2026-10-06	ceph-csi は krbd のまま（rbd-nbd・nbd モジュール不要）	Talos 1.14.1+ は aes256k の libceph パッチをバックポート済み	k8s-test で ceph-rbd の PVC を作成し /dev/rbd0 で読み書きできた（siderolabs/pkgs#1660）	採用
+2026-10-06	テンプレートのディスクを strix0 ではなく ceph-rbd に置く	telmate 3.0.2-rc10 が NFS 上のボリューム名を local-lvm に流用して clone 後の更新が失敗する	"lvm name '919/vm-919-disk-0.raw' contains illegal characters"	採用
+2026-10-06	VM は virtio-scsi-pci・balloon 0	Talos の Proxmox ガイド（SCSI single は bootstrap が止まる、メモリホットプラグなし）	docs.siderolabs.com Proxmox	採用
+2026-10-06	Pod Security の enforce/warn を privileged	MicroK8s は無制限だった。CSI・Alloy・node-exporter・Tailscale がホストアクセスを要し、namespace は Argo CD がラベルなしで作る	Talos 既定は enforce baseline（kube-system のみ除外）	採用
+2026-10-06	Talos のログは hostNetwork Alloy（otelcol.receiver.tcplog、127.0.0.1:6050/6051）で受ける	machined はホストのネットワーク名前空間から送るため ClusterIP に届かない	k8s-test で kubelet/etcd/cri/kernel のログが namespace=talos で届くことを確認	採用
+2026-10-06	auditd と Talos コンソールの machined ポーリングのログは捨てる	数分で数千行出て、対応が要る内容ではない	k8s-test で auditd 2476 行・machined 1162 行（数分）	採用
+2026-10-06	既存 PV は claimRef（uid なし）付きで静的に作り直して付け直す	StatefulSet の PVC 名で事前束縛できる	k8s-test で RBD イメージを書き込み→PV 削除→静的 PV で読み戻し成功	採用
+2026-10-06	MicroK8s の Ansible ロール（microk8s・argocd）を削除し、ブートストラップは kubernetes/bootstrap.sh に	Talos ノードには SSH も Python もない	-	採用

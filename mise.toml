@@ -7,3 +7,6 @@ lefthook = "2.1.17"
 tflint = "0.64.0"
 trivy = "0.75.0"
 "pipx:ansible" = { version = "14.4.0", uvx_args = "--with-executables-from ansible-core", pipx_args = "--include-deps" }
+talosctl = "1.14.2"
+helm = "4.3.0"
+yq = "4.54.1"

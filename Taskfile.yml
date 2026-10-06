@@ -118,6 +118,26 @@ tasks:
         echo "ArgoCD UI: http://localhost:{{.PORT}} (user: admin, password: task argocd:password TF_ENV={{.TF_ENV}})"
         kubectl --kubeconfig "{{.KUBECONFIG_FILE}}" -n argocd port-forward svc/argocd-server {{.PORT}}:80
 
+  k8s:config:
+    desc: Write the kubeconfig and talosconfig of a Talos environment to ansible/artifacts/<env>.{kubeconfig,talosconfig}
+    dir: terraform/environments/{{.TF_ENV}}
+    deps:
+      - terraform:init
+    cmds:
+      - |
+        touch ../../../ansible/artifacts/{{.TF_ENV}}.kubeconfig ../../../ansible/artifacts/{{.TF_ENV}}.talosconfig
+        chmod 600 ../../../ansible/artifacts/{{.TF_ENV}}.kubeconfig ../../../ansible/artifacts/{{.TF_ENV}}.talosconfig
+        terraform output -raw kubeconfig > ../../../ansible/artifacts/{{.TF_ENV}}.kubeconfig
+        terraform output -raw talosconfig > ../../../ansible/artifacts/{{.TF_ENV}}.talosconfig
+        echo "export KUBECONFIG=$(realpath ../../../ansible/artifacts/{{.TF_ENV}}.kubeconfig) TALOSCONFIG=$(realpath ../../../ansible/artifacts/{{.TF_ENV}}.talosconfig)"
+
+  k8s:bootstrap:
+    desc: Install Cilium and Argo CD on a fresh Talos cluster (SEALED_SECRETS_KEY=<file> restores the sealed-secrets key first)
+    deps:
+      - k8s:config
+    cmds:
+      - kubernetes/bootstrap.sh {{.TF_ENV}} {{.SEALED_SECRETS_KEY | default ""}}
+
   ssh:agent:
     desc: Load the VM SSH key into an ssh-agent (starts one on a fixed socket if the shell has none)
     aliases: [ssh:key]
@@ -318,6 +338,41 @@ tasks:
         scp "{{.SRC}}" "{{.HOST}}:$TMP"
         ssh {{.HOST}} "sudo mv $TMP {{.DEST}} && sudo chmod 0644 {{.DEST}}"
         echo "Done. In tfvars, set: cicustom = \"user=<storage_id>:snippets/$(basename {{.DEST}})\""
+
+  proxmox:talos-template:
+    desc: Create the Talos VM template on the shared storage from the Image Factory nocloud image (no-op when it exists)
+    aliases: [pve:talos-template]
+    vars:
+      HOST: '{{.HOST | default "root@192.168.20.10"}}'
+      VMID: '{{.VMID | default "9001"}}'
+      TEMPLATE_NAME: '{{.TEMPLATE_NAME | default "talos-template"}}'
+      # Shared block storage: telmate (3.0.2-rc10) reuses a file storage's "<vmid>/<file>.raw" volume name for the
+      # clone on local-lvm and fails, while an RBD volume name works there
+      STORAGE: '{{.STORAGE | default "ceph-rbd"}}'
+      # Keep in sync with talos_version / talos_schematic_id in terraform/environments/k8s*
+      TALOS_VERSION: '{{.TALOS_VERSION | default "v1.14.2"}}'
+      # Image Factory schematic with siderolabs/qemu-guest-agent only (POST the customization to factory.talos.dev/schematics)
+      SCHEMATIC: '{{.SCHEMATIC | default "ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515"}}'
+    cmds:
+      - |
+        export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
+        ssh -o BatchMode=yes {{.HOST}} bash -s <<'EOF'
+        set -eu
+        if qm status {{.VMID}} >/dev/null 2>&1; then
+          echo "VM {{.VMID}} already exists: $(qm config {{.VMID}} | grep -E '^(name|description):' | tr '\n' ' ')"
+          exit 0
+        fi
+        work=$(mktemp -d)
+        trap 'rm -rf "$work"' EXIT
+        curl -fsSL -o "$work/talos.raw.xz" "https://factory.talos.dev/image/{{.SCHEMATIC}}/{{.TALOS_VERSION}}/nocloud-amd64.raw.xz"
+        xz -d "$work/talos.raw.xz"
+        qm create {{.VMID}} --name {{.TEMPLATE_NAME}} --ostype l26 --cpu x86-64-v3 --cores 2 --memory 2048 \
+          --scsihw virtio-scsi-pci --net0 virtio,bridge=vmbr0 --serial0 socket --agent enabled=1 \
+          --scsi0 "{{.STORAGE}}:0,import-from=$work/talos.raw" --boot order=scsi0 \
+          --description "Talos {{.TALOS_VERSION}} nocloud, schematic {{.SCHEMATIC}}"
+        qm template {{.VMID}}
+        echo "created template {{.VMID}} ({{.TEMPLATE_NAME}}) from Talos {{.TALOS_VERSION}}"
+        EOF
 
   ansible:vault-passfile:
     desc: Create local .vault_pass.txt (gitignored)

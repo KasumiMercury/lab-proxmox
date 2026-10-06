@@ -1,0 +1,38 @@
+# Service logs (kubelet, etcd, containerd, ...) and kernel logs go to the Alloy DaemonSet on the same node
+# (lab-argo platform/alloy-talos, hostNetwork), which pushes them to Loki
+machine:
+  logging:
+    destinations:
+      - endpoint: tcp://127.0.0.1:6050/
+        format: json_lines
+---
+apiVersion: v1alpha1
+kind: KmsgLogConfig
+name: alloy
+url: tcp://127.0.0.1:6051/
+---
+apiVersion: v1alpha1
+kind: UnattendedInstallConfig
+installer:
+  image: ${installer}
+provisioning:
+  diskSelector:
+    match: disk.dev_path == "/dev/sda"
+---
+apiVersion: v1alpha1
+kind: HostnameConfig
+auto: "off"
+hostname: ${hostname}
+---
+apiVersion: v1alpha1
+kind: KubeNetworkConfig
+podSubnets:
+  - ${pod_subnet}
+serviceSubnets:
+  - ${service_subnet}
+---
+# CoreDNS forwarding to the host resolver breaks Cilium's eBPF host routing
+apiVersion: v1alpha1
+kind: ResolverConfig
+hostDNS:
+  forwardKubeDNSToHost: false
