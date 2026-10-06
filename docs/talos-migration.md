@@ -1,6 +1,6 @@
 # MicroK8s → Talos 移行計画
 
-2026-10-06 開始。MicroK8s（Ubuntu 24.04、VM 810/820/830）の k8s クラスタを Talos Linux に置き換える。
+2026-10-06 開始、同日完了。MicroK8s（Ubuntu 24.04、VM 810/820/830）の k8s クラスタを Talos Linux に置き換える。
 判断の記録は [talos-migration-decisions.tsv](talos-migration-decisions.tsv)。
 
 ## 完了条件
@@ -38,6 +38,14 @@
 旧 VM は残さない（ユーザー了承済み）。データは RBD スナップショットと NFS 上のディレクトリに残る。
 
 k8s 以外の VM / CT（talaria、primind、kasuminet、test-vm、gnosis、athanor）には触れない。
+
+## 結果（2026-10-06）
+
+- 全 17 Application が Synced / Healthy。SealedSecret 7 件は作り直さずに復号された（鍵を移行、書き出したファイルは削除済み）。
+- CouchDB の obsidian は移行前後とも docs 245014 / update_seq 246305。talaria.mercuryksm.net 経由でも同じ値。
+- Loki に移行前の MicroK8s のログ、Prometheus に移行前の系列が残っている。Talos のログは namespace="talos" で入っている。
+- controller-manager / scheduler / etcd / apiserver / kubelet のターゲットはすべて up。警告以上のアラートなし。
+- RBD イメージの @pre-talos スナップショットは残してある（不要になったら `rbd snap rm k8s/<image>@pre-talos`）。
 
 ## ユーザー作業
 

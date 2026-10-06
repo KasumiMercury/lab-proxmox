@@ -14,3 +14,5 @@ date	what	why	evidence	result
 2026-10-06	auditd と Talos コンソールの machined ポーリングのログは捨てる	数分で数千行出て、対応が要る内容ではない	k8s-test で auditd 2476 行・machined 1162 行（数分）	採用
 2026-10-06	既存 PV は claimRef（uid なし）付きで静的に作り直して付け直す	StatefulSet の PVC 名で事前束縛できる	k8s-test で RBD イメージを書き込み→PV 削除→静的 PV で読み戻し成功	採用
 2026-10-06	MicroK8s の Ansible ロール（microk8s・argocd）を削除し、ブートストラップは kubernetes/bootstrap.sh に	Talos ノードには SSH も Python もない	-	採用
+2026-10-06	etcd は additionalScrapeConfigs で 192.168.110.181:2381 を直接スクレイプ	Argo CD は Endpoints を同期対象から除外するため、チャートの kubeEtcd.endpoints が作られない	本番で Endpoints が NotFound、変更後 up{job="kube-etcd"}=1	採用
+2026-10-06	Talos ログの量は起動直後の再送分なので追加の drop はしない	平常時は 2 分で約 220 行	起動直後は 10 分で controller-runtime 6302 行・kernel 3409 行、その後 2 分で 219 行	採用
