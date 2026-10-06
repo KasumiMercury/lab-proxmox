@@ -20,7 +20,7 @@ resource "proxmox_vm_qemu" "node" {
   vmid        = each.value.vmid
   name        = each.value.vm_name
   target_node = each.value.target_node
-  tags        = join(";", sort(["${var.cluster_name}", each.value.role, "terraform"]))
+  tags        = join(";", sort([var.cluster_name, each.value.role, "terraform"]))
 
   # qemu-guest-agent comes from the schematic's system extension
   agent = 1
