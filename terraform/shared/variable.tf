@@ -33,7 +33,7 @@ variable "virtual_machines" {
     disk_storage   = optional(string, "local-lvm")
     # "stopped" keeps the VM shut down (applies stop it as well)
     power_state = optional(string, "running")
-    # Ansible role of the VM; non-empty values become inventory groups "<env>_<role>" (e.g. k8s_control_plane)
+    # Ansible role of the VM; non-empty values become inventory groups "<env>_<role>" (e.g. test_worker)
     role = optional(string, "")
   }))
   default = {}

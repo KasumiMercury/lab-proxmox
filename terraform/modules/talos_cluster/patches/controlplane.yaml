@@ -1,0 +1,41 @@
+cluster:
+  etcd:
+    extraArgs:
+      listen-metrics-urls: http://0.0.0.0:2381
+---
+# Cilium is installed by the bootstrap task and then managed by Argo CD
+apiVersion: v1alpha1
+kind: KubeFlannelCNIConfig
+$patch: delete
+---
+# Cilium replaces kube-proxy
+apiVersion: v1alpha1
+kind: KubeProxyConfig
+enabled: false
+---
+# The only control-plane node also runs workloads
+apiVersion: v1alpha1
+kind: KubeNodeConfig
+taints:
+  $patch: delete
+---
+# Scraped by kube-prometheus-stack
+apiVersion: v1alpha1
+kind: KubeControllerManagerConfig
+extraArgs:
+  bind-address: 0.0.0.0
+---
+apiVersion: v1alpha1
+kind: KubeSchedulerConfig
+extraArgs:
+  bind-address: 0.0.0.0
+---
+# Same as MicroK8s, which enforced no Pod Security level: CSI node plugins, Alloy, node-exporter and the Tailscale
+# proxies need host access, and their namespaces are created by Argo CD without labels
+apiVersion: v1alpha1
+kind: KubeAdmissionControlConfig
+name: PodSecurity
+configuration:
+  defaults:
+    enforce: privileged
+    warn: privileged

@@ -18,9 +18,10 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Versions annotated with a '# renovate:' comment on the line above (Ansible role defaults)",
+      "description": "Versions annotated with a '# renovate:' comment on the line above (Ansible role defaults, kubernetes/*.yaml)",
       "managerFilePatterns": [
-        "/^ansible/roles/[^/]+/defaults/main\\.yml$/"
+        "/^ansible/roles/[^/]+/defaults/main\\.yml$/",
+        "/^kubernetes/[^/]+\\.yaml$/"
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( registryUrl=(?<registryUrl>\\S+))?\\n\\s*[A-Za-z0-9_]+:\\s*[\"']?(?<currentValue>[^\\s\"']+)"
