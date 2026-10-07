@@ -41,7 +41,8 @@ tailscale_tags: tag:strix
 # read-only in the UI) sent to Slack with the bot token of the Slack App shared with Zabbix (role
 # zabbix_server; scope chat:write, the bot invited to the channel). Zabbix already alerts on the Linux
 # side of the nodes (CPU, memory, file systems, temperatures, agent down) and the network devices,
-# so these cover what only the metrics here show: the Proxmox cluster, Ceph and the metric pipeline.
+# so these cover what only the metrics here show: the Proxmox cluster, Ceph and the metric pipeline,
+# plus absolute memory thresholds sized for the nodes' memory budget.
 grafana_slack_bot_token: "{{ vault_slack_bot_token | default('') }}"
 grafana_slack_channel: "#pve-alert"
 # Guests (Proxmox name, regex) expected to be running; the others are started and stopped by hand
@@ -49,3 +50,7 @@ grafana_alert_running_guests: k8s-.*|gnosis|athanor
 # Used share of a Proxmox storage / of a Ceph pool (its max_avail already accounts for replication)
 grafana_alert_storage_usage: 0.85
 grafana_alert_ceph_pool_usage: 0.75
+# The VMs leave the nodes little headroom and swap is accepted as the overflow (OSDs can grow past
+# osd_memory_target during recovery): warn before the margin is gone, and when swapped pages are read back
+grafana_alert_memory_available: 1073741824
+grafana_alert_swap_in_pages: 100

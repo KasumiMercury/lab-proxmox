@@ -34,6 +34,18 @@
     'summary': '{{ .Labels.id }} is {{ humanizePercentage .Values.A.Value }} full',
   },
   {
+    'uid': 'pve-memory-low', 'title': 'Proxmox node low on memory', 'severity': 'warning', 'for': '5m',
+    'expr': 'node_memory_MemAvailable_bytes{job="node"}',
+    'evaluator': {'type': 'lt', 'params': [grafana_alert_memory_available]},
+    'summary': '{{ .Labels.instance }} has only {{ humanize1024 .Values.A.Value }}B of memory available',
+  },
+  {
+    'uid': 'pve-swap-in', 'title': 'Proxmox node swapping in', 'severity': 'warning', 'for': '10m',
+    'expr': 'rate(node_vmstat_pswpin{job="node"}[5m])',
+    'evaluator': {'type': 'gt', 'params': [grafana_alert_swap_in_pages]},
+    'summary': '{{ .Labels.instance }} reads {{ humanize .Values.A.Value }} pages/s back from swap: guests or Ceph are being slowed down',
+  },
+  {
     'uid': 'ceph-health-warn', 'title': 'Ceph HEALTH_WARN', 'severity': 'warning', 'for': '5m',
     'expr': 'ceph_health_status',
     'evaluator': {'type': 'within_range', 'params': [0.5, 1.5]},
