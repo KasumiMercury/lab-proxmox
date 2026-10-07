@@ -1,0 +1,4 @@
+---
+# Deepest NVMe power state exit latency the kernel may use for APST (microseconds).
+# 1000 rules out the 970 EVO Plus' PS3 (1.2 ms) and PS4 (8 ms), so APST is effectively off.
+pve_nvme_power_max_latency_us: 1000

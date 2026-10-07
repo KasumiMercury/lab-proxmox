@@ -13,6 +13,7 @@
 - Roles live in `roles/` (`roles_path` in `ansible.cfg`). The k8s environment (Talos) is not managed by Ansible; see "Kubernetes" in the top-level README
 
 - `playbooks/setup-monitoring.yml` (`task monitoring:setup`): uses the static `inventory/hosts.yml` (groups `pve` and `nas`, hosts not created by Terraform) instead of a generated one. Roles `monitoring_server` (strix) and `pve_monitoring` (Proxmox nodes); see "Monitoring" in the top-level README
+- `playbooks/setup-pve.yml` (`task pve:setup`): Proxmox node tuning on the static `inventory/hosts.yml`. Role `pve_nvme_power` limits NVMe APST on hod (kernel command line for the next boot, sysfs for the running system)
 - `playbooks/setup-zabbix.yml` (`task zabbix:setup`): role `zabbix_server` on strix and `zabbix_agent` on the Proxmox nodes (static `inventory/hosts.yml`); see "Zabbix" in the top-level README
 
 ## SSH Auth

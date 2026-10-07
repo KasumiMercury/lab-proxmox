@@ -1,0 +1,24 @@
+---
+# Persists across reboots
+- name: Limit NVMe APST on the kernel command line
+  ansible.builtin.copy:
+    dest: /etc/default/grub.d/nvme-power.cfg
+    content: |
+      GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX nvme_core.default_ps_max_latency_us={{ pve_nvme_power_max_latency_us }}"
+    mode: "0644"
+  notify: update grub
+
+# Applies now: the driver rebuilds the APST table when the per-controller tolerance changes
+- name: Limit NVMe APST on the running controllers
+  ansible.builtin.shell: |
+    set -eu
+    changed=0
+    for f in /sys/class/nvme/nvme*/power/pm_qos_latency_tolerance_us; do
+      if [ "$(cat "$f")" != "{{ pve_nvme_power_max_latency_us }}" ]; then
+        echo {{ pve_nvme_power_max_latency_us }} > "$f"
+        changed=1
+      fi
+    done
+    echo "changed=$changed"
+  register: pve_nvme_power_runtime
+  changed_when: "'changed=1' in pve_nvme_power_runtime.stdout"
