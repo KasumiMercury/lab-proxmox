@@ -18,7 +18,7 @@ nodes = {
     vmid           = 810
     vm_name        = "k8s-hod"
     ip_address     = "192.168.110.181"
-    memory         = 8192
+    memory         = 10240
     network_bridge = "vmbr100"
   }
   "netzach" = {
@@ -27,7 +27,7 @@ nodes = {
     vmid           = 820
     vm_name        = "k8s-netzach"
     ip_address     = "192.168.110.182"
-    memory         = 4096
+    memory         = 6144
     network_bridge = "vmbr0"
     network_tag    = 100
   }
@@ -37,7 +37,7 @@ nodes = {
     vmid           = 830
     vm_name        = "k8s-yesod"
     ip_address     = "192.168.110.183"
-    memory         = 4096
+    memory         = 6144
     network_bridge = "vmbr0"
     network_tag    = 100
   }
