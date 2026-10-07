@@ -54,7 +54,7 @@ Steps (from this repository unless noted):
 1. `git submodule update --init` (checks out `cilium/`; the bootstrap reads the Cilium pin and values from it)
 2. `task proxmox:talos-template` (once)
 3. `task tf:plan TF_ENV=k8s`, then `task tf:apply TF_ENV=k8s`: creates the VMs, installs Talos and bootstraps etcd. The nodes stay NotReady until Cilium runs
-4. `task k8s:bootstrap TF_ENV=k8s`: writes `ansible/artifacts/k8s.kubeconfig` and `k8s.talosconfig` (`task k8s:config`), then runs `kubernetes/bootstrap.sh`: Gateway API CRDs, Cilium, and Argo CD (`kubernetes/argocd.yaml`, chart pin and bootstrap values). Each step is skipped when its result exists, so it can be rerun. `SEALED_SECRETS_KEY=<file>` applies an exported sealed-secrets key before Argo CD starts, so the SealedSecrets committed in lab-argo decrypt without resealing
+4. `task k8s:bootstrap TF_ENV=k8s`: writes `ansible/artifacts/k8s.kubeconfig` and `k8s.talosconfig` (`task k8s:config`), then runs `kubernetes/bootstrap.sh`: Gateway API CRDs, Cilium, the CoreDNS spread across nodes (`kubernetes/coredns-spread.yaml`; Talos only prefers separate nodes, so both replicas would sit on the first Ready node), and Argo CD (`kubernetes/argocd.yaml`, chart pin and bootstrap values). Each step is skipped when its result exists, so it can be rerun. `SEALED_SECRETS_KEY=<file>` applies an exported sealed-secrets key before Argo CD starts, so the SealedSecrets committed in lab-argo decrypt without resealing
 5. Check the cluster:
    ```bash
    export KUBECONFIG=$PWD/ansible/artifacts/k8s.kubeconfig TALOSCONFIG=$PWD/ansible/artifacts/k8s.talosconfig
