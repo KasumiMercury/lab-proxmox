@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Installs what a fresh Talos cluster needs before Argo CD can take over: the Gateway API CRDs and Cilium
-# (pinned in the cilium submodule), the sealed-secrets key when given, and Argo CD (argocd.yaml).
+# (pinned in the cilium submodule), the spread of CoreDNS across nodes, the sealed-secrets key when given,
+# and Argo CD (argocd.yaml).
 # Every step is skipped when its result already exists, so it can be rerun after a failure.
 #
 # Usage: kubernetes/bootstrap.sh <env> [sealed-secrets-key.yaml]
@@ -30,6 +31,11 @@ else
 fi
 kubectl -n kube-system rollout status daemonset/cilium --timeout=600s
 kubectl wait --for=condition=Ready node --all --timeout=600s
+
+# Talos' CoreDNS only prefers other nodes, so both replicas land on the first node that becomes Ready.
+# Talos only creates its manifests and never owns this field, so the spread survives Talos' reconciliation
+kubectl apply --server-side --field-manager=lab-bootstrap -f "$root/kubernetes/coredns-spread.yaml"
+kubectl -n kube-system rollout status deployment/coredns --timeout=300s
 
 # Must exist before the sealed-secrets controller starts, or it generates a key of its own
 if [ -n "$sealed_key" ]; then
