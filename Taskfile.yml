@@ -267,6 +267,17 @@ tasks:
         # Extra args after "--" go to ansible-playbook (e.g. -- --limit pve --tags vmagent)
         ansible-playbook -i inventory/hosts.yml --ask-become-pass $OPTS playbooks/setup-monitoring.yml {{.CLI_ARGS}}
 
+  pve:setup:
+    desc: Tune the Proxmox nodes (NVMe power states on hod)
+    dir: ansible
+    deps:
+      - ssh:agent
+    cmds:
+      - |
+        export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
+        # Extra args after "--" go to ansible-playbook (e.g. -- --check --diff)
+        ansible-playbook -i inventory/hosts.yml playbooks/setup-pve.yml {{.CLI_ARGS}}
+
   zabbix:setup:
     desc: Set up Zabbix with TimescaleDB on strix (network devices over SNMP, agent 2 on the Proxmox nodes)
     aliases: [zbx:setup]
