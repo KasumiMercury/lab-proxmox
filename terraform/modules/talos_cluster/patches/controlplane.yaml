@@ -30,8 +30,9 @@ kind: KubeSchedulerConfig
 extraArgs:
   bind-address: 0.0.0.0
 ---
-# Same as MicroK8s, which enforced no Pod Security level: CSI node plugins, Alloy, node-exporter and the Tailscale
-# proxies need host access, and their namespaces are created by Argo CD without labels
+# Cluster default stays privileged: CSI node plugins, Alloy, node-exporter and the Tailscale proxies need host
+# access. Application namespaces get a stricter level from their Argo CD Application (namespaceLabels in
+# lab-argo apps/values.yaml).
 apiVersion: v1alpha1
 kind: KubeAdmissionControlConfig
 name: PodSecurity
