@@ -4,7 +4,7 @@ repo: https://argoproj.github.io/argo-helm
 chart: argo-cd
 # Check its Kubernetes support when bumping
 # renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
-version: "10.9.6"
+version: "10.10.0"
 # Kept minimal: day-2 settings belong to lab-argo. Keep identical to platform/argocd/values.yaml there, so the
 # hand-over shows no diff. The Application health check is set here too, so the sync waves of the root
 # app-of-apps already wait for each component on the very first sync.
