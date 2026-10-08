@@ -278,6 +278,17 @@ tasks:
         # Extra args after "--" go to ansible-playbook (e.g. -- --check --diff)
         ansible-playbook -i inventory/hosts.yml playbooks/setup-pve.yml {{.CLI_ARGS}}
 
+  pve:firewall:
+    desc: Write the PVE datacenter firewall (keep a console or the tailnet at hand)
+    dir: ansible
+    deps:
+      - ssh:agent
+    cmds:
+      - |
+        export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
+        # Extra args after "--" go to ansible-playbook (e.g. -- -e '{"pve_firewall_disabled_nodes": ["yesod", "netzach"]}')
+        ansible-playbook -i inventory/hosts.yml playbooks/setup-pve-firewall.yml {{.CLI_ARGS}}
+
   zabbix:setup:
     desc: Set up Zabbix with TimescaleDB on strix (network devices over SNMP, agent 2 on the Proxmox nodes)
     aliases: [zbx:setup]

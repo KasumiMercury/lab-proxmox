@@ -1,0 +1,8 @@
+---
+# PVE datacenter firewall. Kept apart from setup-pve.yml: a mistake here can lock out SSH and the GUI,
+# so keep a console (or the tailnet) at hand when changing it.
+# Run with: task pve:firewall
+- name: Configure the datacenter firewall
+  hosts: hod
+  roles:
+    - pve_firewall

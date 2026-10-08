@@ -6,6 +6,7 @@
   hosts: pve
   roles:
     - pve_hardening
+    - pve_tailscale
 
 # hod's NVMe (Samsung 970 EVO Plus) carries the k8s control plane VM. With APST it drops to PS4 after
 # 100 ms idle and takes ~8 ms to wake, which put ~10% of etcd's WAL fsyncs at 8-16 ms

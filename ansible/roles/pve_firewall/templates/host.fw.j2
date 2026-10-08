@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+[OPTIONS]
+
+enable: {{ 0 if item in pve_firewall_disabled_nodes else 1 }}

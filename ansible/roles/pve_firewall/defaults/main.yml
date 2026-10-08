@@ -1,0 +1,22 @@
+---
+# Sources allowed to reach the PVE GUI/API (8006), SSH, SPICE (3128) and VNC consoles. PVE generates the
+# rules for its "management" ipset itself. The nodes are listed so that they keep reaching each other.
+pve_firewall_management:
+  - { cidr: 192.168.0.0/24, comment: admin LAN }
+  - { cidr: 100.64.0.0/10, comment: tailnet }
+  - { cidr: 192.168.20.10, comment: hod }
+  - { cidr: 192.168.20.20, comment: yesod }
+  - { cidr: 192.168.20.30, comment: netzach }
+
+# Ceph clients: the PVE nodes (mon/OSD/mgr among themselves) and the k8s nodes (ceph-csi RBD)
+pve_firewall_ceph_clients:
+  - { cidr: 192.168.20.10, comment: hod }
+  - { cidr: 192.168.20.20, comment: yesod }
+  - { cidr: 192.168.20.30, comment: netzach }
+  - { cidr: 192.168.110.181, comment: k8s-hod }
+  - { cidr: 192.168.110.182, comment: k8s-netzach }
+  - { cidr: 192.168.110.183, comment: k8s-yesod }
+
+# Nodes whose host firewall stays off (host.fw "enable: 0"). For a staged rollout, first run with the other
+# nodes listed (-e '{"pve_firewall_disabled_nodes": ["yesod", "netzach"]}'), check access, then run without it.
+pve_firewall_disabled_nodes: []

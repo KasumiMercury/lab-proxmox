@@ -1,0 +1,18 @@
+---
+# /etc/pve is pmxcfs, shared by the cluster: one node writes every file, and pmxcfs supports neither chmod
+# nor renaming a temporary file over the target, hence no mode and unsafe_writes.
+# Corosync and migration between the nodes are allowed by PVE's built-in rules for the cluster network.
+- name: Turn the host firewall on or off per node
+  ansible.builtin.template:
+    src: host.fw.j2
+    dest: "/etc/pve/nodes/{{ item }}/host.fw"
+    unsafe_writes: true
+  loop: "{{ groups['pve'] }}"
+  run_once: true
+
+- name: Write the datacenter firewall
+  ansible.builtin.template:
+    src: cluster.fw.j2
+    dest: /etc/pve/firewall/cluster.fw
+    unsafe_writes: true
+  run_once: true
