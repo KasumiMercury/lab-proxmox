@@ -96,9 +96,12 @@
   {
     'uid': 'pve-logs-missing', 'title': 'Logs missing from a Proxmox node', 'severity': 'critical', 'for': '1m',
     'datasource': 'victorialogs', 'range': 86400,
-    'expr': '_time:1d | rename _HOSTNAME as host | stats by (host) count() if (_time:10m) as recent',
+    # The nodes log a heartbeat every 5 minutes (role pve_monitoring); their regular logs can pause for
+    # longer than that, which made a plain "no entries for 10 minutes" fire on a quiet but healthy node
+    'expr': '_time:1d | rename _HOSTNAME as host'
+      ~ ' | stats by (host) count() if (_time:15m SYSLOG_IDENTIFIER:journal-heartbeat) as recent',
     'evaluator': {'type': 'lt', 'params': [1]},
-    'summary': 'No journal entries from {{ .Labels.host }} for 10 minutes (systemd-journal-upload not sending)',
+    'summary': 'No journal heartbeat from {{ .Labels.host }} for 15 minutes (systemd-journal-upload not sending)',
   },
 ] %}
 
