@@ -8,7 +8,8 @@
 # logins (IPCC.xs logs the same failure again via PAM, not counted); pveproxy's "401 ... invalid PVE
 # ticket" is an expired session. Only key logins are allowed and sshd logs at INFO, so a rejected key
 # shows up as the client giving up ("authenticating user"), not as "Failed publickey". One line per
-# failed connection.
+# failed connection. pve-logs-missing watches the heartbeat the nodes log every 5 minutes (role
+# pve_monitoring): their regular logs can pause for longer than 10 minutes on a quiet but healthy node.
 {%- set rules = [
   {
     'uid': 'pve-node-offline', 'title': 'Proxmox node offline', 'severity': 'critical', 'for': '2m',
@@ -96,8 +97,6 @@
   {
     'uid': 'pve-logs-missing', 'title': 'Logs missing from a Proxmox node', 'severity': 'critical', 'for': '1m',
     'datasource': 'victorialogs', 'range': 86400,
-    # The nodes log a heartbeat every 5 minutes (role pve_monitoring); their regular logs can pause for
-    # longer than that, which made a plain "no entries for 10 minutes" fire on a quiet but healthy node
     'expr': '_time:1d | rename _HOSTNAME as host'
       ~ ' | stats by (host) count() if (_time:15m SYSLOG_IDENTIFIER:journal-heartbeat) as recent',
     'evaluator': {'type': 'lt', 'params': [1]},
