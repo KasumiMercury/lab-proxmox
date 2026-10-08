@@ -2,6 +2,11 @@
 # Proxmox node tuning that is not part of monitoring.
 # Run with: task pve:setup
 
+- name: Harden SSH and keep Debian security updates applied
+  hosts: pve
+  roles:
+    - pve_hardening
+
 # hod's NVMe (Samsung 970 EVO Plus) carries the k8s control plane VM. With APST it drops to PS4 after
 # 100 ms idle and takes ~8 ms to wake, which put ~10% of etcd's WAL fsyncs at 8-16 ms
 - name: Keep the NVMe out of deep power states

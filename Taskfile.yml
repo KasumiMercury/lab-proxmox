@@ -268,7 +268,7 @@ tasks:
         ansible-playbook -i inventory/hosts.yml --ask-become-pass $OPTS playbooks/setup-monitoring.yml {{.CLI_ARGS}}
 
   pve:setup:
-    desc: Tune the Proxmox nodes (NVMe power states on hod)
+    desc: Tune the Proxmox nodes (SSH hardening, security updates, NVMe power states on hod)
     dir: ansible
     deps:
       - ssh:agent
