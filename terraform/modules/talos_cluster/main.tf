@@ -99,6 +99,10 @@ data "talos_machine_configuration" "this" {
       pod_subnet     = var.pod_subnet
       service_subnet = var.service_subnet
     })],
+    [templatefile("${path.module}/patches/firewall.yaml.tftpl", {
+      cluster_cidrs = concat([for n in values(var.nodes) : "${n.ip_address}/32"], [var.pod_subnet])
+      admin_cidrs   = var.admin_cidrs
+    })],
     each.value.role == "controlplane" ? [local.controlplane_patch] : [],
     var.config_patches,
   )

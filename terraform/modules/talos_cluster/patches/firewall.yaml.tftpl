@@ -1,0 +1,56 @@
+# Host firewall: the node ports are reachable only from the cluster (nodes and pods), and the API endpoints
+# (Talos apid, Kubernetes API) also from the admin networks. Without this, the unauthenticated etcd metrics
+# (:2381) and every other port were open to the whole LAN.
+apiVersion: v1alpha1
+kind: NetworkDefaultActionConfig
+ingress: block
+---
+# etcd, Cilium health/Hubble, ceph-csi, node-exporter, Cilium/Envoy metrics, kubelet, controller-manager,
+# scheduler, Alloy, trustd. Prometheus and Alloy scrape from pods.
+apiVersion: v1alpha1
+kind: NetworkRuleConfig
+name: cluster-tcp
+portSelector:
+  ports:
+    - 2379-2383
+    - 4240
+    - 4244
+    - 8080
+    - 9100
+    - 9962-9965
+    - 10250
+    - 10257
+    - 10259
+    - 12345
+    - 50001
+  protocol: tcp
+ingress:
+%{ for cidr in cluster_cidrs ~}
+  - subnet: ${cidr}
+%{ endfor ~}
+---
+# Cilium VXLAN between nodes
+apiVersion: v1alpha1
+kind: NetworkRuleConfig
+name: cluster-vxlan
+portSelector:
+  ports:
+    - 8472
+  protocol: udp
+ingress:
+%{ for cidr in cluster_cidrs ~}
+  - subnet: ${cidr}
+%{ endfor ~}
+---
+apiVersion: v1alpha1
+kind: NetworkRuleConfig
+name: apid-and-apiserver
+portSelector:
+  ports:
+    - 6443
+    - 50000
+  protocol: tcp
+ingress:
+%{ for cidr in concat(cluster_cidrs, admin_cidrs) ~}
+  - subnet: ${cidr}
+%{ endfor ~}

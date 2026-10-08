@@ -49,6 +49,11 @@ variable "pod_subnet" {
   type        = string
 }
 
+variable "admin_cidrs" {
+  description = "Networks allowed to reach the Talos API (50000) and the Kubernetes API (6443) besides the cluster itself"
+  type        = list(string)
+}
+
 variable "service_subnet" {
   description = "Service CIDR"
   type        = string

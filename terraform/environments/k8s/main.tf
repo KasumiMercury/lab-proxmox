@@ -10,6 +10,7 @@ module "talos_cluster" {
   gateway            = var.gateway
   nameserver         = var.nameserver
   pod_subnet         = var.pod_subnet
+  admin_cidrs        = var.admin_cidrs
   service_subnet     = var.service_subnet
   nodes              = var.nodes
   config_patches     = var.config_patches
