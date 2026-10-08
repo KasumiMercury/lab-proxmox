@@ -92,7 +92,7 @@ tasks:
       - task: terraform:destroy
 
   argocd:password:
-    desc: Show the ArgoCD initial admin password (uses ansible/artifacts/<env>.kubeconfig)
+    desc: Show the ArgoCD initial admin password of a fresh cluster (lab-argo turns admin off and the secret is deleted afterwards)
     aliases: [k8s:argocd-password]
     silent: true
     vars:
