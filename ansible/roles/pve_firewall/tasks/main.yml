@@ -1,18 +1,43 @@
 ---
-# /etc/pve is pmxcfs, shared by the cluster: one node writes every file, and pmxcfs supports neither chmod
-# nor renaming a temporary file over the target, hence no mode and unsafe_writes.
+# /etc/pve is pmxcfs, shared by the cluster: one node writes every file. pmxcfs refuses the chmod/utime
+# that Ansible's file modules do even with unsafe_writes, so the content is piped in with cat and the
+# files are compared first to stay idempotent.
 # Corosync and migration between the nodes are allowed by PVE's built-in rules for the cluster network.
-- name: Turn the host firewall on or off per node
-  ansible.builtin.template:
-    src: host.fw.j2
-    dest: "/etc/pve/nodes/{{ item }}/host.fw"
-    unsafe_writes: true
+# Host files first: a node listed in pve_firewall_disabled_nodes is switched off before cluster.fw
+# enables the firewall
+- name: Render the firewall files
+  ansible.builtin.set_fact:
+    pve_firewall_files: >-
+      {{ pve_firewall_files | default([]) + [{
+           'dest': '/etc/pve/nodes/' ~ node ~ '/host.fw',
+           'content': lookup('ansible.builtin.template', 'host.fw.j2', template_vars={'node': node})}] }}
   loop: "{{ groups['pve'] }}"
+  loop_control:
+    loop_var: node
   run_once: true
 
-- name: Write the datacenter firewall
-  ansible.builtin.template:
-    src: cluster.fw.j2
-    dest: /etc/pve/firewall/cluster.fw
-    unsafe_writes: true
+- name: Add the datacenter firewall
+  ansible.builtin.set_fact:
+    pve_firewall_files: >-
+      {{ pve_firewall_files + [{'dest': '/etc/pve/firewall/cluster.fw',
+                                'content': lookup('ansible.builtin.template', 'cluster.fw.j2')}] }}
+  run_once: true
+
+- name: Read the current firewall files
+  ansible.builtin.slurp:
+    src: "{{ item.dest }}"
+  loop: "{{ pve_firewall_files }}"
+  register: pve_firewall_current
+  failed_when: false
+  run_once: true
+
+- name: Write the firewall files that differ
+  ansible.builtin.shell: cat > {{ item.item.dest | quote }}
+  args:
+    stdin: "{{ item.item.content }}"
+    stdin_add_newline: false
+  loop: "{{ pve_firewall_current.results }}"
+  loop_control:
+    label: "{{ item.item.dest }}"
+  when: (item.content | default('') | b64decode) != item.item.content
   run_once: true
