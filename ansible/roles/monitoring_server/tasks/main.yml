@@ -33,6 +33,7 @@
   loop:
     - { path: "" }
     - { path: data/victoriametrics }
+    - { path: data/victorialogs }
     # The Grafana image runs as uid 472
     - { path: data/grafana, owner: "472" }
     - { path: grafana/provisioning/datasources }
@@ -53,13 +54,20 @@
     mode: "0600"
   no_log: true
 
-- name: Provision the VictoriaMetrics data source
+- name: Provision the data sources
   ansible.builtin.template:
     src: datasources.yml.j2
-    dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/victoriametrics.yml"
+    dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/datasources.yml"
     owner: root
     group: root
     mode: "0644"
+  notify: restart grafana
+
+# Held only the VictoriaMetrics data source before datasources.yml; two files with the same uid conflict
+- name: Remove the old data source file
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}/grafana/provisioning/datasources/victoriametrics.yml"
+    state: absent
   notify: restart grafana
 
 - name: Provision the dashboard provider

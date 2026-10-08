@@ -2,6 +2,9 @@
 # Where vmagent pushes (Prometheus remote write). Set by playbooks/setup-monitoring.yml from the nas host.
 pve_monitoring_remote_write_url: ""
 pve_monitoring_scrape_interval: 30s
+# Where systemd-journal-upload pushes the journal (VictoriaLogs journald endpoint, without /upload).
+# Set by playbooks/setup-monitoring.yml from the nas host.
+pve_monitoring_journal_upload_url: ""
 
 # vmagent buffers on disk while the remote write target is unreachable (e.g. strix rebooting),
 # and sends the backlog once it is back. Oldest data is dropped beyond this size.

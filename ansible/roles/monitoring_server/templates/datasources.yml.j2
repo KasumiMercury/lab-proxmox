@@ -11,3 +11,8 @@ datasources:
       prometheusType: Prometheus
       # Scrape interval of the vmagents on the Proxmox nodes
       timeInterval: 30s
+  - name: VictoriaLogs
+    uid: victorialogs
+    type: victoriametrics-logs-datasource
+    access: proxy
+    url: http://victorialogs:9428

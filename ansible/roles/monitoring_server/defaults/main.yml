@@ -9,9 +9,19 @@ victoriametrics_retention: 1y
 # Remote write endpoint for the vmagents on the Proxmox nodes (plus 127.0.0.1 for debugging)
 victoriametrics_listen_address: "{{ lan_address }}"
 
+# renovate: datasource=docker depName=victoriametrics/victoria-logs
+victorialogs_version: v1.53.0
+victorialogs_image: "victoriametrics/victoria-logs:{{ victorialogs_version }}"
+victorialogs_retention: 90d
+# journald upload endpoint for the Proxmox nodes (plus 127.0.0.1 for debugging)
+victorialogs_listen_address: "{{ lan_address }}"
+
 # renovate: datasource=docker depName=grafana/grafana
 grafana_version: 13.2.3
 grafana_image: "grafana/grafana:{{ grafana_version }}"
+# Data source plugin for VictoriaLogs, installed by Grafana at startup
+# renovate: datasource=custom.grafana-plugins depName=victoriametrics-logs-datasource
+grafana_victorialogs_plugin_version: 0.32.0
 # Only used when Grafana initializes its database (first start); change it in the UI afterwards.
 # Generated once on the controller and kept in the gitignored artifacts directory.
 grafana_admin_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/../artifacts/strix-grafana-admin-password chars=ascii_letters,digits length=24') }}"
@@ -37,12 +47,12 @@ tailscale_image: "tailscale/tailscale:{{ tailscale_version }}"
 tailscale_oauth_client_secret: "{{ vault_tailscale_oauth_client_secret | default('') }}"
 tailscale_tags: tag:strix
 
-# Alerts: rules on the VictoriaMetrics data (templates/alert-rules.yml.j2, in the "Proxmox" folder,
+# Alerts: rules on the VictoriaMetrics and VictoriaLogs data (templates/alert-rules.yml.j2, in the "Proxmox" folder,
 # read-only in the UI) sent to Slack with the bot token of the Slack App shared with Zabbix (role
 # zabbix_server; scope chat:write, the bot invited to the channel). Zabbix already alerts on the Linux
 # side of the nodes (CPU, memory, file systems, temperatures, agent down) and the network devices,
 # so these cover what only the metrics here show: the Proxmox cluster, Ceph and the metric pipeline,
-# plus absolute memory thresholds sized for the nodes' memory budget.
+# plus absolute memory thresholds sized for the nodes' memory budget, and failed logins from the journal.
 grafana_slack_bot_token: "{{ vault_slack_bot_token | default('') }}"
 grafana_slack_channel: "#pve-alert"
 # Guests (Proxmox name, regex) expected to be running; the others are started and stopped by hand
@@ -54,3 +64,5 @@ grafana_alert_ceph_pool_usage: 0.75
 # osd_memory_target during recovery): warn before the margin is gone, and when swapped pages are read back
 grafana_alert_memory_available: 1073741824
 grafana_alert_swap_in_pages: 100
+# Failed SSH or Proxmox GUI/API logins on one node within 5 minutes
+grafana_alert_auth_failures: 5

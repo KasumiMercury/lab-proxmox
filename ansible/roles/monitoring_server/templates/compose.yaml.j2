@@ -15,15 +15,31 @@ services:
     volumes:
       - ./data/victoriametrics:/storage
 
+  victorialogs:
+    image: {{ victorialogs_image }}
+    restart: unless-stopped
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod={{ victorialogs_retention }}
+      - -httpListenAddr=:9428
+    ports:
+      - "127.0.0.1:9428:9428"
+      - "{{ victorialogs_listen_address }}:9428:9428"
+    volumes:
+      - ./data/victorialogs:/storage
+
   grafana:
     image: {{ grafana_image }}
     restart: unless-stopped
     depends_on:
       - victoriametrics
+      - victorialogs
     env_file: grafana.env
     environment:
       GF_SERVER_ROOT_URL: {{ grafana_root_url }}
       GF_ANALYTICS_REPORTING_ENABLED: "false"
+      # Installed before provisioning runs, which needs the plugin for the data source and the log alerts
+      GF_PLUGINS_PREINSTALL_SYNC: victoriametrics-logs-datasource@{{ grafana_victorialogs_plugin_version }}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

@@ -1,6 +1,7 @@
 ---
-# Proxmox metrics: VictoriaMetrics + Grafana on the NAS (strix), and a vmagent on every Proxmox node
-# that scrapes node_exporter, prometheus-pve-exporter and the Ceph mgr locally and pushes to strix.
+# Proxmox metrics and logs: VictoriaMetrics + VictoriaLogs + Grafana on the NAS (strix), and on every
+# Proxmox node a vmagent that scrapes node_exporter, prometheus-pve-exporter and the Ceph mgr locally
+# and pushes to strix, plus systemd-journal-upload that pushes the journal.
 # Push only, because the router lets 192.168.20.0/24 reach strix but not the other way round.
 # Run with: task monitoring:setup  (asks for the strix sudo password)
 
@@ -16,3 +17,4 @@
     - role: pve_monitoring
       vars:
         pve_monitoring_remote_write_url: "http://{{ hostvars['strix'].lan_address }}:8428/api/v1/write"
+        pve_monitoring_journal_upload_url: "http://{{ hostvars['strix'].lan_address }}:9428/insert/journald"

@@ -1,8 +1,10 @@
 ---
-- name: Require the remote write URL
+- name: Require the push URLs
   ansible.builtin.assert:
-    that: pve_monitoring_remote_write_url | length > 0
-    fail_msg: pve_monitoring_remote_write_url is not set
+    that:
+      - pve_monitoring_remote_write_url | length > 0
+      - pve_monitoring_journal_upload_url | length > 0
+    fail_msg: pve_monitoring_remote_write_url and pve_monitoring_journal_upload_url must be set
 
 - name: Install node_exporter and python3-venv
   ansible.builtin.apt:
@@ -248,3 +250,63 @@
     state: started
     daemon_reload: true
   tags: [vmagent]
+
+# --- journal upload ---
+
+# The package enables none of its units
+- name: Install systemd-journal-remote
+  ansible.builtin.apt:
+    name: systemd-journal-remote
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: [packages, journal_upload]
+
+- name: Create the journal-upload config directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/systemd/journal-upload.conf.d
+    - /etc/systemd/system/systemd-journal-upload.service.d
+  tags: [journal_upload]
+
+- name: Point systemd-journal-upload at VictoriaLogs
+  ansible.builtin.copy:
+    content: |
+      # Managed by Ansible (role pve_monitoring)
+      [Upload]
+      URL={{ pve_monitoring_journal_upload_url }}
+    dest: /etc/systemd/journal-upload.conf.d/victorialogs.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart journal-upload
+  tags: [journal_upload]
+
+# journal-upload exits when an upload fails and resumes from its saved cursor (--save-state) when
+# restarted, so entries are only held back while strix is down. The unit's quick first restarts
+# would hit the default start limit (5 in 10s) and leave it failed for good.
+- name: Keep restarting systemd-journal-upload while strix is unreachable
+  ansible.builtin.copy:
+    content: |
+      # Managed by Ansible (role pve_monitoring)
+      [Unit]
+      StartLimitIntervalSec=0
+    dest: /etc/systemd/system/systemd-journal-upload.service.d/retry.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart journal-upload
+  tags: [journal_upload]
+
+- name: Start systemd-journal-upload
+  ansible.builtin.systemd:
+    name: systemd-journal-upload
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [journal_upload]

@@ -1,7 +1,14 @@
 # Managed by Ansible (role monitoring_server)
-# Each rule is an instant query (A) and a threshold on it (B). Queries that return nothing while all
-# is well (No data) count as normal. Annotations use .Labels / .Values: a "$" would be taken for an
-# environment variable by the provisioning.
+# Each rule is an instant query (A) and a threshold on it (B): PromQL on VictoriaMetrics, or a LogsQL
+# stats query on VictoriaLogs (datasource victorialogs). The VictoriaLogs plugin clips the query to
+# the rule's time range, so a LogsQL _time filter longer than 10 minutes needs a matching range.
+# Queries that return nothing while all is well (No data) count as normal. Annotations use
+# .Labels / .Values: a "$" would be taken for an environment variable by the provisioning.
+# pve-auth-failures matches the messages as logged on PVE 9 / trixie. pvedaemon checks the GUI/API
+# logins (IPCC.xs logs the same failure again via PAM, not counted); pveproxy's "401 ... invalid PVE
+# ticket" is an expired session. Only key logins are allowed and sshd logs at INFO, so a rejected key
+# shows up as the client giving up ("authenticating user"), not as "Failed publickey". One line per
+# failed connection.
 {%- set rules = [
   {
     'uid': 'pve-node-offline', 'title': 'Proxmox node offline', 'severity': 'critical', 'for': '2m',
@@ -75,6 +82,24 @@
     'evaluator': {'type': 'gt', 'params': [0]},
     'summary': 'No Ceph metrics for 10 minutes (no active mgr, or its prometheus module is off)',
   },
+  {
+    'uid': 'pve-auth-failures', 'title': 'Failed logins on a Proxmox node', 'severity': 'warning', 'for': '0s',
+    'datasource': 'victorialogs',
+    'expr': '_time:5m ('
+      ~ '(SYSLOG_IDENTIFIER:in(pvedaemon, pveproxy) "authentication failure; rhost=")'
+      ~ ' OR (SYSLOG_IDENTIFIER:in(sshd, sshd-session) ("Invalid user" OR "closed by authenticating user"'
+      ~ ' OR "Disconnected from authenticating user" OR "maximum authentication attempts exceeded"))'
+      ~ ') | rename _HOSTNAME as host, SYSLOG_IDENTIFIER as source | stats by (host, source) count() as failures',
+    'evaluator': {'type': 'gt', 'params': [grafana_alert_auth_failures - 1]},
+    'summary': '{{ .Values.A.Value }} failed logins to {{ .Labels.source }} on {{ .Labels.host }} in 5 minutes',
+  },
+  {
+    'uid': 'pve-logs-missing', 'title': 'Logs missing from a Proxmox node', 'severity': 'critical', 'for': '1m',
+    'datasource': 'victorialogs', 'range': 86400,
+    'expr': '_time:1d | rename _HOSTNAME as host | stats by (host) count() if (_time:10m) as recent',
+    'evaluator': {'type': 'lt', 'params': [1]},
+    'summary': 'No journal entries from {{ .Labels.host }} for 10 minutes (systemd-journal-upload not sending)',
+  },
 ] %}
 
 apiVersion: 1
@@ -90,13 +115,17 @@ groups:
         condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 600, to: 0 }
-            datasourceUid: victoriametrics
+            relativeTimeRange: { from: {{ rule.range | default(600) }}, to: 0 }
+            datasourceUid: {{ rule.datasource | default('victoriametrics') }}
             model:
               refId: A
               expr: {{ rule.expr | to_json }}
+{% if rule.datasource | default('victoriametrics') == 'victorialogs' %}
+              queryType: stats
+{% else %}
               instant: true
               range: false
+{% endif %}
           - refId: B
             datasourceUid: __expr__
             model:

@@ -13,6 +13,13 @@
       "transformTemplates": [
         "{\"releases\": [items.{\"version\": $string(revision), \"releaseTimestamp\": createdAt}]}"
       ]
+    },
+    "grafana-plugins": {
+      "description": "Versions of a grafana.com plugin (packageName = plugin ID)",
+      "defaultRegistryUrlTemplate": "https://grafana.com/api/plugins/{{packageName}}/versions",
+      "transformTemplates": [
+        "{\"releases\": [items.{\"version\": version, \"releaseTimestamp\": createdAt}]}"
+      ]
     }
   },
   "customManagers": [
