@@ -1,5 +1,5 @@
 ---
-# Installs tailscaled only. Joining the tailnet needs a login in the browser, once per node:
+# Installs tailscaled only (hod; see playbooks/setup-pve.yml). Joining the tailnet needs a login in the browser:
 #   tailscale up --accept-dns=false   (then disable key expiry for the node in the admin console)
 - name: Install the Tailscale archive key
   ansible.builtin.get_url:

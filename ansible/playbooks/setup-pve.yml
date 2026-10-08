@@ -6,6 +6,11 @@
   hosts: pve
   roles:
     - pve_hardening
+
+# Only hod joins the tailnet (the management path when the LAN is unavailable); yesod and netzach stay off it
+- name: Keep Tailscale installed on hod
+  hosts: hod
+  roles:
     - pve_tailscale
 
 # hod's NVMe (Samsung 970 EVO Plus) carries the k8s control plane VM. With APST it drops to PS4 after
