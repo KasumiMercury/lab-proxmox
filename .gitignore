@@ -20,3 +20,6 @@ ansible/inventory/*.ini
 # Ansible artifacts fetched from hosts (kubeconfig etc.)
 ansible/artifacts/*
 !ansible/artifacts/.keep
+
+# Local-only notes (may contain sensitive details)
+/docs/
