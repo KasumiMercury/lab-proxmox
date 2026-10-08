@@ -123,6 +123,16 @@
   loop_control:
     label: "{{ item.item.file }}.json"
 
+# Dashboards kept in this repository (files/dashboards), e.g. the VictoriaLogs one for the node journals
+- name: Write local dashboards
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ monitoring_dir }}/grafana/dashboards/{{ item | basename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  with_fileglob: "dashboards/*.json"
+
 - name: Write the Tailscale auth key
   ansible.builtin.template:
     src: tailscale.env.j2

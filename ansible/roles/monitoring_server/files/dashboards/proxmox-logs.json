@@ -1,0 +1,339 @@
+{
+  "uid": "pve-logs",
+  "title": "Proxmox logs",
+  "tags": [
+    "proxmox",
+    "logs"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "host",
+        "label": "Node",
+        "type": "query",
+        "datasource": {
+          "type": "victoriametrics-logs-datasource",
+          "uid": "victorialogs"
+        },
+        "query": {
+          "type": "fieldValue",
+          "field": "_HOSTNAME",
+          "query": "*",
+          "limit": 50,
+          "refId": "VariableQueryEditor-VariableQuery"
+        },
+        "definition": "_HOSTNAME",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": "*",
+        "multi": false,
+        "sort": 1,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "search",
+        "label": "Search (LogsQL)",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Log volume",
+      "description": "Journal entries per node. A node that drops to zero for long stretches is normal when idle; the heartbeat alert watches the upload itself.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_HOSTNAME:${host} ${search} | stats by (_HOSTNAME) count() as logs",
+          "queryType": "statsRange",
+          "refId": "A",
+          "legendFormat": "{{_HOSTNAME}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Warnings and errors",
+      "description": "Entries with syslog priority warning or worse (PRIORITY 0-4), by node and program.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_HOSTNAME:${host} ${search} PRIORITY:in(0, 1, 2, 3, 4) | stats by (_HOSTNAME, SYSLOG_IDENTIFIER) count() as logs",
+          "queryType": "statsRange",
+          "refId": "A",
+          "legendFormat": "{{_HOSTNAME}} {{SYSLOG_IDENTIFIER}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Failed logins",
+      "description": "Same match as the \"Failed logins on a Proxmox node\" alert: PVE GUI/API (pvedaemon) and SSH (sshd-session).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_HOSTNAME:${host} ((SYSLOG_IDENTIFIER:in(pvedaemon, pveproxy) \"authentication failure; rhost=\") OR (SYSLOG_IDENTIFIER:in(sshd, sshd-session) (\"Invalid user\" OR \"closed by authenticating user\" OR \"Disconnected from authenticating user\" OR \"maximum authentication attempts exceeded\"))) | stats by (_HOSTNAME, SYSLOG_IDENTIFIER) count() as failures",
+          "queryType": "statsRange",
+          "refId": "A",
+          "legendFormat": "{{_HOSTNAME}} {{SYSLOG_IDENTIFIER}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "Failed logins",
+      "description": "The log lines behind the Failed logins graph.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_HOSTNAME:${host} ((SYSLOG_IDENTIFIER:in(pvedaemon, pveproxy) \"authentication failure; rhost=\") OR (SYSLOG_IDENTIFIER:in(sshd, sshd-session) (\"Invalid user\" OR \"closed by authenticating user\" OR \"Disconnected from authenticating user\" OR \"maximum authentication attempts exceeded\"))) | sort by (_time) desc | limit 1000",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      }
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "Warnings and errors",
+      "description": "Latest 1000 entries with priority warning or worse.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_HOSTNAME:${host} ${search} PRIORITY:in(0, 1, 2, 3, 4) | sort by (_time) desc | limit 1000",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      }
+    },
+    {
+      "id": 6,
+      "type": "logs",
+      "title": "All logs",
+      "description": "Latest 1000 entries. Narrow down with the node and search variables; the search box takes any LogsQL filter, e.g. _SYSTEMD_UNIT:pveproxy.service or \"error\".",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_HOSTNAME:${host} ${search} | sort by (_time) desc | limit 1000",
+          "queryType": "instant",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      }
+    }
+  ]
+}
