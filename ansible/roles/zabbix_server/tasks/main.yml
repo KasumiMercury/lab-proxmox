@@ -14,7 +14,7 @@
     fail_msg: >-
       vault_zabbix_db_password, vault_zabbix_admin_password, vault_zabbix_snmp_community,
       vault_tailscale_oauth_client_secret and vault_slack_bot_token must be set
-      (ansible-vault edit inventory/host_vars/strix/vault.yml)
+      (sops inventory/host_vars/strix/secrets.sops.yaml)
   no_log: true
 
 - name: Read the tailnet DNS suffix

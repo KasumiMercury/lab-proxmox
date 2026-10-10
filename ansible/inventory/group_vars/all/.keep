@@ -1,1 +1,1 @@
-Place encrypted vars here, e.g., secrets.yml (encrypted with Ansible Vault).
+Place encrypted vars here, e.g., secrets.sops.yaml (encrypted with sops).

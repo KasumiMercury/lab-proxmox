@@ -22,7 +22,7 @@ zabbix_web_image: "zabbix/zabbix-web-nginx-pgsql:{{ zabbix_version }}"
 zabbix_agent_image: "zabbix/zabbix-agent2:{{ zabbix_version }}"
 zabbix_timezone: Asia/Tokyo
 
-# Secrets in inventory/host_vars/strix/vault.yml
+# Secrets in inventory/host_vars/strix/secrets.sops.yaml
 zabbix_db_password: "{{ vault_zabbix_db_password | default('') }}"
 # Set on the Admin user by the role (the image starts with Admin / zabbix)
 zabbix_admin_password: "{{ vault_zabbix_admin_password | default('') }}"
@@ -30,7 +30,7 @@ zabbix_admin_password: "{{ vault_zabbix_admin_password | default('') }}"
 zabbix_snmp_community: "{{ vault_zabbix_snmp_community | default('') }}"
 
 # Bot token (xoxb-) of the Slack App shared with Grafana (role monitoring_server): scopes chat:write,
-# im:write, groups:write and reactions:write, and the bot invited to the channel. Secret in the vault.
+# im:write, groups:write and reactions:write, and the bot invited to the channel. Secret in the sops file.
 zabbix_slack_bot_token: "{{ vault_slack_bot_token | default('') }}"
 
 # Frontend on the tailnet as its own node (https://<hostname>.<tailnet>.ts.net), like Grafana.

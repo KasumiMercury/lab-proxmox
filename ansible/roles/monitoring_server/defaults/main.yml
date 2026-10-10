@@ -43,7 +43,7 @@ grafana_tailscale_hostname: pve-grafana
 tailscale_version: v1.102.5
 tailscale_image: "tailscale/tailscale:{{ tailscale_version }}"
 # OAuth client (scope auth_keys, tag below) shared by the Tailscale containers on strix;
-# the secret is in inventory/host_vars/strix/vault.yml
+# the secret is in inventory/host_vars/strix/secrets.sops.yaml
 tailscale_oauth_client_secret: "{{ vault_tailscale_oauth_client_secret | default('') }}"
 tailscale_tags: tag:strix
 

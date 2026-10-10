@@ -5,7 +5,7 @@
 *.tfstate.backup
 *.tfplan
 
-# Decrypted secrets (commit only *.tfvars.json.gpg)
+# Decrypted secrets (commit only the sops-encrypted *.sops.json)
 *.tfvars.json
 
 # Ansible generated inventory and cache

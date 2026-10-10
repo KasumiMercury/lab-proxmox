@@ -1,1 +1,1 @@
-Per-host secrets are generated here as encrypted vault.yml files.
+Per-host secrets are generated here as sops-encrypted secrets.sops.yaml files.

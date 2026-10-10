@@ -7,26 +7,24 @@
 
 - `AWS_ENDPOINT_URL_S3`: S3-compatible endpoint (Cloudflare R2: `https://<account_id>.r2.cloudflarestorage.com`)
 
-- `GPG_PASS`: used by `task -d terraform encrypt ...` / `task -d terraform decrypt ...`; 空なら実行時に対話で入力
-- `ANSIBLE_PRIVATE_KEY_FILE`, `ANSIBLE_VAULT_PASSWORD_FILE`, `ANSIBLE_REMOTE_USER`: override defaults when running Ansible tasks
+- `ANSIBLE_PRIVATE_KEY_FILE`, `ANSIBLE_REMOTE_USER`: override defaults when running Ansible tasks
 
 ## Workflow
-1. `task tf:decrypt -- terraform/environments/test` (first time / after a pull that changed `*.gpg`)
-2. `task tf:plan TF_ENV=test`
-3. `task tf:apply TF_ENV=test`
-4. `task ans:inventory TF_ENV=test`
-5. `task ans:ping TF_ENV=test`
-6. `task ans:run TF_ENV=test`
-7. `task tf:destroy TF_ENV=test`
+1. `task tf:plan TF_ENV=test`
+2. `task tf:apply TF_ENV=test`
+3. `task ans:inventory TF_ENV=test`
+4. `task ans:ping TF_ENV=test`
+5. `task ans:run TF_ENV=test`
+6. `task tf:destroy TF_ENV=test`
 
-`task deploy TF_ENV=test` runs steps 3, 4 and 6 in one go. Every Terraform-backed task depends on `tf:init`, which runs once per invocation.
+`task deploy TF_ENV=test` runs steps 2, 3 and 5 in one go. Every Terraform-backed task depends on `tf:init`, which runs once per invocation.
 
 Ansible tasks (`ans:ping`, `ans:run`, `ans:setup`, `deploy`) also depend on `ssh:agent`, which makes sure the VM SSH key is loaded in an ssh-agent:
 - If the shell already has an agent (`SSH_AUTH_SOCK`), the key is added there. Otherwise an agent is started on a fixed socket (`~/.ssh/lab-proxmox-agent.sock`) that all tasks share, so the passphrase is asked once per boot, not per task
 - Key path: `SSH_KEY_FILE` (default `~/.ssh/id_ed25519`; `ANSIBLE_PRIVATE_KEY_FILE` is honored as well). Put the matching `.pub` next to it, or the task derives it once
 - `task ssh:agent-stop` stops the fixed-socket agent. Skipped automatically when `ANSIBLE_USE_PASSWORDS=true`
 
-Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:destroy` `tf:output` `tf:passwords` `tf:encrypt` `tf:decrypt` `ans:inventory` `ans:ping` `ans:run` `ans:setup` `ans:vault-hostvars` `ssh:key` `pve:snippet` `pve:talos-template` `argocd:password` `argocd:port-forward`
+Short aliases (`task --list` shows all): `tf:init` `tf:plan` `tf:apply` `tf:destroy` `tf:output` `tf:passwords` `ans:inventory` `ans:ping` `ans:run` `ans:setup` `ans:hostvars-secrets` `ssh:key` `pve:snippet` `pve:talos-template` `argocd:password` `argocd:port-forward`
 
 ## Kubernetes (k8s environment)
 The k8s environment is a Talos Linux cluster: `k8s-hod` is the control plane (it also runs workloads), `k8s-netzach` and `k8s-yesod` are workers. Terraform creates the VMs and configures Talos; there is no Ansible and no SSH on the nodes (use `talosctl`).
@@ -80,7 +78,7 @@ Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`),
 ## Monitoring (Proxmox nodes and strix)
 `task monitoring:setup` runs `ansible/playbooks/setup-monitoring.yml` against the static inventory `ansible/inventory/hosts.yml` (Proxmox nodes as root, the NAS strix as `mercury` over Tailscale; it asks for strix's sudo password).
 - strix (role `monitoring_server`): Docker Compose project `/srv/monitoring` with VictoriaMetrics (retention 1y, listening on `192.168.110.5:8428` and `127.0.0.1:8428`), VictoriaLogs (retention 90d, `192.168.110.5:9428` and `127.0.0.1:9428`), Grafana and a Tailscale container. Grafana listens on localhost only and is published by the Tailscale container as its own tailnet node, `https://pve-grafana.<tailnet>.ts.net` (`grafana` is the k8s Grafana). Each service on strix gets its own Tailscale container, so names do not collide and the host's tailscaled (SSH) is left alone. The VictoriaMetrics and VictoriaLogs data sources are provisioned (uids `victoriametrics`, `victorialogs`); Grafana installs the VictoriaLogs plugin (`victoriametrics-logs-datasource`, pinned) at startup through `GF_PLUGINS_PREINSTALL_SYNC`. The initial admin password is generated into `ansible/artifacts/strix-grafana-admin-password` (gitignored) and only applies on Grafana's first start
-- The Tailscale containers log in with an OAuth client (scope `auth_keys`, tag `tag:strix`) whose secret is `vault_tailscale_oauth_client_secret` in `ansible/inventory/host_vars/strix/vault.yml` (ansible-vault; `task ansible:vault-passfile` creates `.vault_pass.txt`, which `task monitoring:setup` passes on). The tailnet policy needs `tag:strix` in `tagOwners`. Node state is kept in `/srv/monitoring/tailscale/state`, so the secret is only used for the first login
+- The Tailscale containers log in with an OAuth client (scope `auth_keys`, tag `tag:strix`) whose secret is `vault_tailscale_oauth_client_secret` in `ansible/inventory/host_vars/strix/secrets.sops.yaml` (see Secrets). The tailnet policy needs `tag:strix` in `tagOwners`. Node state is kept in `/srv/monitoring/tailscale/state`, so the secret is only used for the first login
 - Proxmox nodes (role `pve_monitoring`): node_exporter (Debian package, `127.0.0.1:9100`), prometheus-pve-exporter (PyPI venv in `/opt/prometheus-pve-exporter`, `127.0.0.1:9221`) and vmagent (`127.0.0.1:8429`). vmagent scrapes the local exporters every 30s and pushes to strix. Push, because the router routes 192.168.20.0/24 → strix but not strix → 192.168.20.0/24. While strix is unreachable vmagent buffers up to 1 GiB per node in `/var/lib/vmagent` and sends it later
 - Logs: `systemd-journal-upload` (package `systemd-journal-remote`) pushes each node's journal to VictoriaLogs (`http://192.168.110.5:9428/insert/journald`). Stream fields are VictoriaLogs' journald defaults (`_MACHINE_ID`, `_HOSTNAME`, `_SYSTEMD_UNIT`). The uploader saves its cursor in `/var/lib/systemd/journal-upload/state`; while strix is down it exits and is restarted every minute at most (the drop-in `retry.conf` lifts the start limit), then resumes from the cursor, so the local journal is the buffer. The first start uploads the whole local journal
 - The exporter uses the API user `prometheus@pve` (PVEAuditor on `/`) with token `exporter`. The secret is shown only when the token is created, so the role writes it to `/etc/prometheus/pve.yml` on every node in the same run. If a node lacks that file later (e.g. a new node), the role fails: remove the token (`pveum user token remove prometheus@pve exporter`) and re-run to issue a new one everywhere
@@ -93,13 +91,13 @@ Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`),
 ## Zabbix (strix)
 `task zabbix:setup` runs `ansible/playbooks/setup-zabbix.yml` (role `zabbix_server`) against strix in the static inventory `ansible/inventory/hosts.yml` (asks for strix's sudo password).
 - Docker Compose project `/srv/zabbix`: TimescaleDB (PostgreSQL 17), Zabbix server, frontend (nginx, `127.0.0.1:8080`), agent 2 and a Tailscale container that publishes the frontend as `https://zabbix.<tailnet>.ts.net` (same OAuth client and `tag:strix` as Grafana). The server creates the schema on its first start and, with `ENABLE_TIMESCALEDB=true`, turns history and trends into hypertables. timescaledb-tune sizes PostgreSQL for `timescaledb_tune_memory` (1 GB) when the database is created; `max_connections` is overridden on the command line (`timescaledb_max_connections`, 100), because the tune caps it at 25 for that size and the Zabbix server alone needs about 30
-- Secrets in `ansible/inventory/host_vars/strix/vault.yml`: `vault_zabbix_db_password`, `vault_zabbix_admin_password` (set on `Admin` through the API on the first run, when `Admin` / `zabbix` still works) and `vault_zabbix_snmp_community` (global secret macro `{$SNMP_COMMUNITY}`)
+- Secrets in `ansible/inventory/host_vars/strix/secrets.sops.yaml`: `vault_zabbix_db_password`, `vault_zabbix_admin_password` (set on `Admin` through the API on the first run, when `Admin` / `zabbix` still works) and `vault_zabbix_snmp_community` (global secret macro `{$SNMP_COMMUNITY}`)
 - The built-in host "Zabbix server" is pointed at the agent container (`zabbix-agent`). It sees the container's file systems and interfaces, not strix's
 - Network devices are `zabbix_snmp_hosts` in the role defaults (SNMPv2c, host group "Network devices", templates shipped with Zabbix). The role creates missing hosts and keeps their SNMP interface, group and templates in line; anything else set in the UI is kept. The Cisco 891FJ is polled at `192.168.110.1` (template "Cisco IOS by SNMP"). The AT-x210-16GT is polled at its management address `192.168.10.2` (template "Network Generic Device by SNMP"). The 891FJ runs a zone-based firewall (Vlan100 = zone SERVER, Vlan10 = MANAGEMENT) and only the zone-pair SERVER-to-MANAGEMENT (ACL `ACL-SERVER-TO-MGMT-MONITOR`: SNMP and ping from 192.168.110.5 to 192.168.10.2) lets strix reach the switch; the router itself is in the self zone and answers directly
 - Own templates in `ansible/roles/zabbix_server/files/templates` (`zabbix_own_templates`) are imported through the API when `configuration.importcompare` reports a difference; templates in `zabbix_removed_templates` are deleted (with what they created on the hosts). Hosts in `zabbix_snmp_hosts` can set host macros (`macros`)
   - 891FJ: no temperature sensor values (`ciscoEnvMonPresent` = cAccessMon; the CISCO-ENVMON-MIB temperature rows have empty descriptions and value 0, the entity sensor MIBs are empty, `show environment` only says "normal"). "Cisco IOS by SNMP" still discovers the rows and watches their state (warning / critical triggers); the host macro `{$TEMP_CRIT_LOW}` = -273 silences its "Temperature is too low" for the 0 °C values
   - AT-x210: "Allied Telesis AlliedWare Plus environment by SNMP" reads AT-ENVMONv2-MIB: temperature (value, upper threshold, status), voltages (value, status). High on out-of-range status, Warning within `{$AT.TEMP.WARN.MARGIN}` (10 °C) of the upper threshold
-- SNMP on the devices is configured by hand, read-only and limited to strix, with the community from the vault (`ansible-vault view inventory/host_vars/strix/vault.yml`):
+- SNMP on the devices is configured by hand, read-only and limited to strix, with the community from the sops file (`sops decrypt --extract '["vault_zabbix_snmp_community"]' ansible/inventory/host_vars/strix/secrets.sops.yaml`):
   - Cisco IOS: `access-list 99 permit 192.168.110.5` / `snmp-server community <community> RO 99`
   - AlliedWare Plus: `snmp-server` / `snmp-server community <community> ro <access-list>` with a standard access list that permits only 192.168.110.5
 - Proxmox nodes (role `zabbix_agent`, second play of the playbook): Zabbix agent 2 from the official repository (`zabbix_agent_series`, keep it in step with `zabbix_version`) and lm-sensors. Active checks only, because the router lets 192.168.20.0/24 reach strix but not the reverse: the agents connect to the server's trapper port, published on `192.168.110.5:10051`. The server role registers every host of the inventory group `pve` in "Hypervisors" without interfaces, with "Linux by Zabbix agent active" (the Proxmox and Ceph side stays in VictoriaMetrics / Grafana) and "Linux lm-sensors by Zabbix agent active". `{$NET.IF.IFNAME.NOT_MATCHES}` also drops the guest and firewall interfaces (`tap`, `fwbr`, `fwpr`, `fwln`). No encryption between agent and server for now
@@ -108,7 +106,7 @@ Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`),
 
 ## Terraform Layout
 - `terraform/shared/`: backend, providers, root module (`main.tf`), variables. Shared by every environment
-- `terraform/environments/<env>/`: symlinks to `shared/*.tf` plus `<env>.auto.tfvars`, `<env>_credential.auto.tfvars.json(.gpg)`, `.terraform.lock.hcl`. `k8s` has its own root module for Talos (`terraform/modules/talos_cluster`), and `k8s-test` links to it
+- `terraform/environments/<env>/`: symlinks to `shared/*.tf` plus `<env>.auto.tfvars`, `<env>_credential.sops.json` (sops-encrypted tfvars), `.terraform.lock.hcl`. `k8s` has its own root module for Talos (`terraform/modules/talos_cluster`), and `k8s-test` links to it
 - VMs get the Proxmox tags `<env>` (directory name), their `role` (if set) and `terraform`
 - State key is set at init: `terraform init -backend-config="key=proxmox/<env>/terraform.tfstate"` (`task terraform:init` does this)
 - Backend is Cloudflare R2 (S3-compatible); endpoint and credentials come from `AWS_*` env vars
@@ -118,7 +116,6 @@ Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`),
 - `TF_ENV`: environment name (`test`, `k8s`, `k8s-test`). Default `test`
 - `ANSIBLE_USE_PASSWORDS`: write passwords into inventory (default `false`)
 - `SSH_KEY_FILE` / `ANSIBLE_PRIVATE_KEY_FILE`: SSH private key loaded by `ssh:agent`, e.g. `~/.ssh/id_ed25519`
-- `ANSIBLE_VAULT_PASSWORD_FILE`: path to vault password file, e.g. `.vault_pass.txt`
 - Inventory output: `ansible/inventory/<env>.ini`
 - Playbook: `ansible/playbooks/setup.yml`. If `ansible/playbooks/setup-<env>.yml` exists it is used instead (override with `ANSIBLE_PLAYBOOK=...`)
 - Cloud-init: Proxmox generates user-data from Terraform (`ciuser` / `cipassword` / `sshkeys`). On Ubuntu cloud images that user gets passwordless sudo and key-only SSH by default, so no snippet is needed for the default (key-based) Ansible flow
@@ -135,10 +132,10 @@ Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`),
   ```
 
 ## Secrets
-- Keep decrypted tfvars outside git; commit only `*.tfvars.json.gpg` (`*.tfvars.json` is gitignored)
-- Encrypt: `task -d terraform encrypt -- terraform/environments/<env>` → `*.tfvars.json.gpg`
-- Decrypt: `task -d terraform decrypt -- terraform/environments/<env>` → `*.tfvars.json` (0600, overwrites existing)
-- Single file: `task -d terraform gpg-decrypt-file -- terraform/environments/test/test_credential.auto.tfvars.json.gpg`
-- `task ansible:vault-passfile` → `.vault_pass.txt` (gitignored)
-- `task ansible:vault-hostvars-generate TF_ENV=test` → encrypted `ansible/inventory/host_vars/<vm>/vault.yml`
+- Every secret is a `*.sops.*` file encrypted with [sops](https://github.com/getsops/sops) to the age keys in `.sops.yaml`: the primary key in `~/.config/sops/age/keys.txt` (sops' default location) and a backup key kept offline and in Vaultwarden
+- Edit in place: `sops terraform/environments/<env>/<env>_credential.sops.json` / `sops ansible/inventory/host_vars/strix/secrets.sops.yaml`
+- Terraform: `tf:plan` / `tf:apply` / `tf:destroy` decrypt `<env>_credential.sops.json` into a FIFO and pass it as `-var-file`, so no plaintext is written. Environments without one (`k8s`, `k8s-test`) run plain terraform
+- Ansible: the `community.sops.sops` vars plugin (`ansible.cfg`) decrypts `inventory/{host,group}_vars/**/*.sops.yaml` when the inventory loads. `sops` must be on `PATH` (mise installs it)
+- `task ansible:hostvars-secrets-generate TF_ENV=test` → `ansible/inventory/host_vars/<vm>/secrets.sops.yaml` (`ansible_password` / `ansible_become_password` from the Terraform outputs)
+- After adding or removing a key in `.sops.yaml`: `task secrets:updatekeys`
 - No-password inventory: `ANSIBLE_USE_PASSWORDS=false task ansible:generate-inventory TF_ENV=test`

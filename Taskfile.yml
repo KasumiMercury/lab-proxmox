@@ -1,9 +1,5 @@
 version: '3'
 
-includes:
-  tf:
-    taskfile: "terraform/Taskfile.yml"
-
 vars:
   TF_ENV: '{{.TF_ENV | default "test"}}'
   ANSIBLE_USE_PASSWORDS: '{{.ANSIBLE_USE_PASSWORDS | default "false"}}'
@@ -25,6 +21,19 @@ tasks:
         echo "Initializing Terraform for {{.TF_ENV}} environment..."
         terraform init -backend-config="key=proxmox/{{.TF_ENV}}/terraform.tfstate"
 
+  terraform:run:
+    internal: true
+    dir: terraform/environments/{{.TF_ENV}}
+    cmds:
+      - |
+        # <env>_credential.sops.json is decrypted into a FIFO for this one command, never onto the disk
+        CRED={{.TF_ENV}}_credential.sops.json
+        if [ -f "$CRED" ]; then
+          sops exec-file --filename credential.auto.tfvars.json "$CRED" 'terraform {{.ARGS}} -var-file={}'
+        else
+          terraform {{.ARGS}}
+        fi
+
   terraform:plan:
     desc: Plan Terraform changes for specified environment
     aliases: [tf:plan]
@@ -34,7 +43,8 @@ tasks:
     cmds:
       - |
         echo "Planning Terraform changes for {{.TF_ENV}} environment..."
-        terraform plan
+      - task: terraform:run
+        vars: { ARGS: plan }
 
   terraform:apply:
     desc: Apply Terraform changes for specified environment
@@ -45,7 +55,8 @@ tasks:
     cmds:
       - |
         echo "Applying Terraform changes for {{.TF_ENV}} environment..."
-        terraform apply
+      - task: terraform:run
+        vars: { ARGS: apply }
 
   terraform:destroy:
     desc: Destroy Terraform resources for specified environment
@@ -56,7 +67,8 @@ tasks:
     cmds:
       - |
         echo "Destroying Terraform resources for {{.TF_ENV}} environment..."
-        terraform destroy
+      - task: terraform:run
+        vars: { ARGS: destroy }
 
   terraform:output:
     desc: Show Terraform outputs for specified environment
@@ -229,12 +241,6 @@ tasks:
         if [ -n "${ANSIBLE_PRIVATE_KEY_FILE:-}" ]; then
           OPTS="$OPTS --private-key $ANSIBLE_PRIVATE_KEY_FILE"
         fi
-        # Vault password file (optional)
-        if [ -n "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ]; then
-          OPTS="$OPTS --vault-password-file $ANSIBLE_VAULT_PASSWORD_FILE"
-        elif [ -f ../.vault_pass.txt ]; then
-          OPTS="$OPTS --vault-password-file ../.vault_pass.txt"
-        fi
         echo "Using inventory: {{.ANSIBLE_INVENTORY_FILE}}"
         echo "Using playbook: {{.ANSIBLE_PLAYBOOK}}"
         # Extra args after "--" go to ansible-playbook (e.g. -- -e samba_services_enabled=false)
@@ -256,16 +262,9 @@ tasks:
     cmds:
       - |
         export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
-        # strix's Tailscale OAuth client secret is in inventory/host_vars/strix/vault.yml
-        OPTS=""
-        if [ -n "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ]; then
-          OPTS="--vault-password-file $ANSIBLE_VAULT_PASSWORD_FILE"
-        elif [ -f ../.vault_pass.txt ]; then
-          OPTS="--vault-password-file ../.vault_pass.txt"
-        fi
         # Static inventory (not generated from Terraform); strix needs its sudo password
         # Extra args after "--" go to ansible-playbook (e.g. -- --limit pve --tags vmagent)
-        ansible-playbook -i inventory/hosts.yml --ask-become-pass $OPTS playbooks/setup-monitoring.yml {{.CLI_ARGS}}
+        ansible-playbook -i inventory/hosts.yml --ask-become-pass playbooks/setup-monitoring.yml {{.CLI_ARGS}}
 
   pve:setup:
     desc: Tune the Proxmox nodes (SSH hardening, security updates, NVMe power states on hod)
@@ -298,14 +297,7 @@ tasks:
     cmds:
       - |
         export SSH_AUTH_SOCK="${SSH_AUTH_SOCK:-{{.SSH_AGENT_SOCK}}}"
-        # The Zabbix and Tailscale secrets are in inventory/host_vars/strix/vault.yml
-        OPTS=""
-        if [ -n "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ]; then
-          OPTS="--vault-password-file $ANSIBLE_VAULT_PASSWORD_FILE"
-        elif [ -f ../.vault_pass.txt ]; then
-          OPTS="--vault-password-file ../.vault_pass.txt"
-        fi
-        ansible-playbook -i inventory/hosts.yml --ask-become-pass $OPTS playbooks/setup-zabbix.yml {{.CLI_ARGS}}
+        ansible-playbook -i inventory/hosts.yml --ask-become-pass playbooks/setup-zabbix.yml {{.CLI_ARGS}}
 
   ansible:test-connection:
     desc: Test Ansible connection to VMs
@@ -324,11 +316,6 @@ tasks:
         fi
         if [ -n "${ANSIBLE_PRIVATE_KEY_FILE:-}" ]; then
           OPTS="$OPTS --private-key $ANSIBLE_PRIVATE_KEY_FILE"
-        fi
-        if [ -n "${ANSIBLE_VAULT_PASSWORD_FILE:-}" ]; then
-          OPTS="$OPTS --vault-password-file $ANSIBLE_VAULT_PASSWORD_FILE"
-        elif [ -f ../.vault_pass.txt ]; then
-          OPTS="$OPTS --vault-password-file ../.vault_pass.txt"
         fi
         echo "Using inventory: {{.ANSIBLE_INVENTORY_FILE}}"
         ansible -i {{.ANSIBLE_INVENTORY_FILE}} $OPTS all -m ping
@@ -396,30 +383,9 @@ tasks:
         echo "created template {{.VMID}} ({{.TEMPLATE_NAME}}) from Talos {{.TALOS_VERSION}}"
         EOF
 
-  ansible:vault-passfile:
-    desc: Create local .vault_pass.txt (gitignored)
-    cmds:
-      - |
-        if [ -f .vault_pass.txt ]; then
-          echo ".vault_pass.txt already exists (nothing to do)."
-          exit 0
-        fi
-        echo "This creates .vault_pass.txt locally (gitignored)."
-        echo "It will be used by ansible-vault and ansible.cfg."
-        printf "Enter Vault password: " >&2; stty -echo; IFS= read -r P; stty echo; echo
-        printf "Confirm Vault password: " >&2; stty -echo; IFS= read -r C; stty echo; echo
-        if [ "$P" != "$C" ]; then
-          echo "Passwords do not match." >&2
-          exit 1
-        fi
-        # Task's built-in shell has no umask: create the file as 0600 before writing the secret
-        install -m 0600 /dev/null .vault_pass.txt
-        printf "%s\n" "$P" > .vault_pass.txt
-        echo ".vault_pass.txt created with 0600 permissions."
-
-  ansible:vault-hostvars-generate:
-    desc: Generate per-host encrypted host_vars with ansible-vault from Terraform outputs
-    aliases: [ans:vault-hostvars]
+  ansible:hostvars-secrets-generate:
+    desc: Generate per-host sops-encrypted host_vars (ansible_password, ansible_become_password) from Terraform outputs
+    aliases: [ans:hostvars-secrets]
     vars:
       TF_ENV: '{{.TF_ENV | default "test"}}'
     dir: terraform/environments/{{.TF_ENV}}
@@ -427,37 +393,29 @@ tasks:
       - terraform:init
     cmds:
       - |
-        if [ ! -f ../../../.vault_pass.txt ]; then
-          echo "Vault password file not found: ../../../.vault_pass.txt" >&2
-          echo "Run: task ansible:vault-passfile" >&2
-          exit 1
-        fi
         echo "Generating encrypted host_vars from Terraform outputs for {{.TF_ENV}}..."
         VM_INFO=$(terraform output -json vm_connection_info)
         PASSWORDS=$(terraform output -json vm_passwords)
-        CREDENTIALS=$(terraform output -json vm_credentials)
-        mkdir -p ../../../ansible/inventory/host_vars
         echo "$VM_INFO" | jq -r 'keys[]' | while read vm_key; do
           VM_NAME=$(echo "$VM_INFO" | jq -r ".\"$vm_key\".name")
-          PASSWORD=$(echo "$PASSWORDS" | jq -r ".\"$vm_key\"")
-          HV_DIR=../../../ansible/inventory/host_vars/$VM_NAME
-          HV_FILE=$HV_DIR/vault.yml
-          mkdir -p "$HV_DIR"
-          printf '%s\n' \
-            "ansible_password: \"$PASSWORD\"" \
-            "ansible_become_password: \"$PASSWORD\"" \
-            > "$HV_FILE"
-          # Encrypt with ansible-vault using local password file
-          (cd ../../../ansible && ansible-vault encrypt --vault-password-file ../.vault_pass.txt "inventory/host_vars/$VM_NAME/vault.yml")
-          echo "Encrypted: ansible/inventory/host_vars/$VM_NAME/vault.yml"
+          HV_FILE=../../../ansible/inventory/host_vars/$VM_NAME/secrets.sops.yaml
+          mkdir -p "$(dirname "$HV_FILE")"
+          echo "$PASSWORDS" | jq --arg k "$vm_key" '{ansible_password: .[$k], ansible_become_password: .[$k]}' \
+            | sops encrypt --filename-override "$HV_FILE" --input-type json --output-type yaml /dev/stdin > "$HV_FILE"
+          echo "Encrypted: ansible/inventory/host_vars/$VM_NAME/secrets.sops.yaml"
         done
         echo "Done. Generate inventory without passwords next:"
         echo "ANSIBLE_USE_PASSWORDS=false task ansible:generate-inventory TF_ENV={{.TF_ENV}}"
 
   ansible:generate-inventory-vault:
-    desc: Generate inventory without passwords (for Vault-managed host_vars)
+    desc: Generate inventory without passwords (for sops-managed host_vars)
     vars:
       TF_ENV: '{{.TF_ENV | default "test"}}'
     cmds:
       - |
         ANSIBLE_USE_PASSWORDS=false task ansible:generate-inventory TF_ENV={{.TF_ENV}}
+
+  secrets:updatekeys:
+    desc: Re-encrypt every *.sops.* file to the keys in .sops.yaml (after adding or removing a key)
+    cmds:
+      - git ls-files '*.sops.*' ':!.sops.yaml' | xargs -r -n1 sops updatekeys -y
