@@ -40,7 +40,8 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       # GitHub login (client in grafana.env); users other than grafana_github_admin_user_id get no role and are refused
       GF_AUTH_GITHUB_ENABLED: "true"
-      GF_AUTH_GITHUB_SCOPES: user:email
+      # read:org: Grafana lists the user's teams on every login and fails (404) without it
+      GF_AUTH_GITHUB_SCOPES: user:email,read:org
       GF_AUTH_GITHUB_ROLE_ATTRIBUTE_PATH: "id == `{{ grafana_github_admin_user_id }}` && 'Admin' || ''"
       GF_AUTH_GITHUB_ROLE_ATTRIBUTE_STRICT: "true"
       # Installed before provisioning runs, which needs the plugin for the data source and the log alerts
