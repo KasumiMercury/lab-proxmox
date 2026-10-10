@@ -307,6 +307,31 @@
   notify: restart tailscaled
   tags: [tailscale]
 
+- name: Create the tailscaled drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/tailscaled.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [tailscale]
+
+# The packaged unit has Restart=on-failure, so a clean exit on SIGTERM leaves it down for good.
+# A pkill on the Proxmox host reaches processes inside the container (2026-10-08).
+# systemctl stop is not affected by Restart=always.
+- name: Restart tailscaled whenever it exits
+  ansible.builtin.copy:
+    content: |
+      # Managed by Ansible (role nextcloud)
+      [Service]
+      Restart=always
+    dest: /etc/systemd/system/tailscaled.service.d/restart.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+  tags: [tailscale]
+
 - name: Set tailscaled service state
   ansible.builtin.systemd:
     name: tailscaled
