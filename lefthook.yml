@@ -1,6 +1,18 @@
 pre-push:
   jobs:
     - name: "tflint"
-      run: tflint --recursive -f compact
+      # Same directories as tflint --recursive, but environments with <env>_credential.sops.json get it as -var-file
+      # through a FIFO (the variables are needed to evaluate the root module)
+      run: |
+        status=0
+        for dir in $(find terraform -name '*.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u); do
+          cred=$(find "$dir" -maxdepth 1 -name '*_credential.sops.json')
+          if [ -n "$cred" ]; then
+            sops exec-file --filename credential.auto.tfvars.json "$cred" "tflint --chdir=$dir -f compact --var-file={}" || status=1
+          else
+            tflint --chdir="$dir" -f compact || status=1
+          fi
+        done
+        exit $status
     - name: "trivy scan"
       run: trivy config terraform --exit-code 1
