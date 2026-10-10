@@ -8,8 +8,11 @@
     that:
       - tailscale_oauth_client_secret | length > 0
       - grafana_slack_bot_token | length > 0
+      - grafana_github_client_id | length > 0
+      - grafana_github_client_secret | length > 0
     fail_msg: >-
-      vault_tailscale_oauth_client_secret and vault_slack_bot_token must be set
+      vault_tailscale_oauth_client_secret, vault_slack_bot_token, vault_grafana_github_client_id and
+      vault_grafana_github_client_secret must be set
       (sops inventory/host_vars/strix/secrets.sops.yaml)
   no_log: true
 
