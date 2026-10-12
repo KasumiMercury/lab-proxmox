@@ -10,7 +10,7 @@ pve_monitoring_journal_upload_url: ""
 # and sends the backlog once it is back. Oldest data is dropped beyond this size.
 # The archive is verified against the release's _checksums.txt, so a version bump needs no hash
 # renovate: datasource=github-releases depName=VictoriaMetrics/VictoriaMetrics
-vmagent_version: v1.153.0
+vmagent_version: v1.154.0
 vmagent_max_disk_usage: 1GiB
 # Cache limit; the default (60% of RAM) is far beyond what a few local targets need,
 # and the nodes are short on memory
