@@ -3,7 +3,7 @@
 monitoring_dir: /srv/monitoring
 
 # renovate: datasource=docker depName=victoriametrics/victoria-metrics
-victoriametrics_version: v1.153.0
+victoriametrics_version: v1.154.0
 victoriametrics_image: "victoriametrics/victoria-metrics:{{ victoriametrics_version }}"
 victoriametrics_retention: 1y
 # Remote write endpoint for the vmagents on the Proxmox nodes (plus 127.0.0.1 for debugging)
