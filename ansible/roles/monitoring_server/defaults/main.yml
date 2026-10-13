@@ -17,7 +17,7 @@ victorialogs_retention: 90d
 victorialogs_listen_address: "{{ lan_address }}"
 
 # renovate: datasource=docker depName=grafana/grafana
-grafana_version: 13.2.3
+grafana_version: 13.2.4
 grafana_image: "grafana/grafana:{{ grafana_version }}"
 # Data source plugin for VictoriaLogs, installed by Grafana at startup
 # renovate: datasource=custom.grafana-plugins depName=victoriametrics-logs-datasource
