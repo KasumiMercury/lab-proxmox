@@ -1,0 +1,20 @@
+---
+# Options kept in the Ceph config database (`ceph config set <who> <option> <value>`).
+# Values are strings in the form `ceph config get` prints them, so a match means nothing to change.
+# Removing an entry here does not reset the option on the cluster; run `ceph config rm <who> <option>`.
+# Left out on purpose: osd.N osd_mclock_max_capacity_iops_ssd (each OSD measures it at first start)
+# and mgr/prometheus/exclude_perf_counters (set by the pve_monitoring role).
+pve_ceph_config:
+  - who: mon
+    option: auth_allow_insecure_global_id_reclaim
+    value: "false"
+  # 2 GiB so the OSD fits beside the k8s VMs; the 4 GiB default overcommits every node
+  - who: osd
+    option: osd_memory_target
+    value: "2147483648"
+  # A single kv commit over bluestore_log_op_age (5 s) raises BLUESTORE_SLOW_OP_ALERT. The default
+  # lifetime of 86400 kept the warning for a day after a stall of a few seconds during Prometheus
+  # compactions; the slow ops are still written to /var/log/ceph/ceph-osd.N.log
+  - who: osd
+    option: bluestore_slow_ops_warn_lifetime
+    value: "3600"

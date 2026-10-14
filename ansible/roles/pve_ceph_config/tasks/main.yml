@@ -1,0 +1,19 @@
+---
+# The config database is cluster-wide, so one node reads and writes it for all of them
+- name: Read the current Ceph config values
+  ansible.builtin.command: ceph config get {{ item.who }} {{ item.option }}
+  loop: "{{ pve_ceph_config }}"
+  loop_control:
+    label: "{{ item.who }} {{ item.option }}"
+  register: pve_ceph_config_current
+  changed_when: false
+  check_mode: false
+  run_once: true
+
+- name: Set the Ceph config values that differ
+  ansible.builtin.command: ceph config set {{ item.item.who }} {{ item.item.option }} {{ item.item.value }}
+  loop: "{{ pve_ceph_config_current.results }}"
+  loop_control:
+    label: "{{ item.item.who }} {{ item.item.option }}: {{ item.stdout | trim }} -> {{ item.item.value }}"
+  when: item.stdout | trim != item.item.value
+  run_once: true

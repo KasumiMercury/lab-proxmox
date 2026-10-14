@@ -8,6 +8,11 @@
     - pve_hardening
 
 # Only hod joins the tailnet (the management path when the LAN is unavailable); yesod and netzach stay off it
+- name: Keep the Ceph config database in line with the repository
+  hosts: pve
+  roles:
+    - pve_ceph_config
+
 - name: Keep Tailscale installed on hod
   hosts: hod
   roles:
