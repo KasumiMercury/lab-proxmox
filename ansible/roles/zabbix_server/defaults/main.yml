@@ -37,7 +37,7 @@ zabbix_slack_bot_token: "{{ vault_slack_bot_token | default('') }}"
 # Uses the OAuth client of the monitoring_server role (vault_tailscale_oauth_client_secret, tag:strix).
 zabbix_tailscale_hostname: zabbix
 # renovate: datasource=docker depName=tailscale/tailscale
-zabbix_tailscale_version: v1.102.5
+zabbix_tailscale_version: v1.104.1
 zabbix_tailscale_image: "tailscale/tailscale:{{ zabbix_tailscale_version }}"
 zabbix_tailscale_oauth_client_secret: "{{ vault_tailscale_oauth_client_secret | default('') }}"
 zabbix_tailscale_tags: tag:strix
