@@ -57,6 +57,14 @@
       "groupName": "VictoriaMetrics"
     },
     {
+      "description": "Tailscale on the Proxmox node and athanor (apt) and the containers on strix (Docker) move together",
+      "matchPackageNames": [
+        "tailscale/tailscale",
+        "tailscale"
+      ],
+      "groupName": "Tailscale"
+    },
+    {
       "description": "Zabbix images are tagged <os>-<version>; only compare the ubuntu-x.y.z tags",
       "matchPackageNames": [
         "zabbix/zabbix-server-pgsql"

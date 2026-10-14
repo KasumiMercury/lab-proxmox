@@ -54,7 +54,7 @@
       - libmagickcore-6.q16-7-extra
       - "postgresql-{{ nextcloud_pg_version }}"
       - python3-psycopg2
-      - tailscale
+      - "tailscale={{ nextcloud_tailscale_version }}"
       - rsync
     state: present
     update_cache: true

@@ -17,6 +17,9 @@ nextcloud_php_upload_limit: 512M
 
 # PostgreSQL from the PGDG repository; the major version matches the old postgres container
 nextcloud_pg_version: 18
+
+# renovate: datasource=deb depName=tailscale registryUrl=https://pkgs.tailscale.com/stable/ubuntu?suite=noble&components=main&binaryArch=amd64
+nextcloud_tailscale_version: 1.104.1
 nextcloud_db_name: nextcloud
 # dbuser in config.php (created by the Nextcloud installer; owns every table)
 nextcloud_db_user: oc_admin
