@@ -1,0 +1,162 @@
+---
+# Replaces the code with the nextcloud_version tarball and runs occ upgrade, the way the Docker image's
+# entrypoint did: the tree has no updater/ and keeps custom_apps/, so the built-in updater cannot be used.
+# Included from main.yml when the running version differs from nextcloud_version, or when a
+# previous run replaced the code but did not finish occ upgrade (needsDbUpgrade).
+# On failure the instance stays in maintenance mode; roll back with the snapshot taken here.
+
+- name: Check the requested Nextcloud version
+  ansible.builtin.assert:
+    that:
+      - nextcloud_version is version(nextcloud_running_version, '>=')
+      - (nextcloud_version.split('.')[0] | int) - (nextcloud_running_version.split('.')[0] | int) <= 1
+    fail_msg: >-
+      Cannot go from {{ nextcloud_running_version }} to {{ nextcloud_version }}:
+      Nextcloud upgrades one major version at a time and cannot be downgraded.
+
+- name: Stop the Nextcloud cron timer
+  ansible.builtin.systemd:
+    name: nextcloud-cron.timer
+    state: stopped
+
+- name: Turn on maintenance mode
+  ansible.builtin.command:
+    argv: [php, occ, maintenance:mode, --on]
+    chdir: "{{ nextcloud_webroot }}"
+  become: true
+  become_user: www-data
+  changed_when: true
+
+- name: List snapshots of the container
+  ansible.builtin.command:
+    argv: [pct, listsnapshot, "{{ nextcloud_pve_vmid }}"]
+  delegate_to: "{{ nextcloud_pve_host }}"
+  remote_user: root
+  become: false
+  register: nextcloud_snapshots
+  changed_when: false
+
+# Snapshot names allow only letters, digits, "-" and "_"
+- name: Snapshot the container (rootfs and the data volume) before the upgrade
+  ansible.builtin.command:
+    argv:
+      - pct
+      - snapshot
+      - "{{ nextcloud_pve_vmid }}"
+      - "{{ nextcloud_snapshot }}"
+      - --description
+      - "Before Nextcloud {{ nextcloud_running_version }} -> {{ nextcloud_version }} (in maintenance mode)"
+  delegate_to: "{{ nextcloud_pve_host }}"
+  remote_user: root
+  become: false
+  when: nextcloud_snapshot not in nextcloud_snapshots.stdout
+  vars:
+    nextcloud_snapshot: "pre_nextcloud_{{ nextcloud_version | replace('.', '_') }}"
+
+- name: Upgrade the Nextcloud tree
+  vars:
+    nextcloud_tarball_url: "https://download.nextcloud.com/server/releases/nextcloud-{{ nextcloud_version }}.tar.bz2"
+    nextcloud_staging_dir: "/root/nextcloud-{{ nextcloud_version }}"
+  block:
+    - name: Create the staging directory
+      ansible.builtin.file:
+        path: "{{ nextcloud_staging_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Download the Nextcloud release
+      ansible.builtin.get_url:
+        url: "{{ nextcloud_tarball_url }}"
+        dest: "{{ nextcloud_staging_dir }}/nextcloud.tar.bz2"
+        checksum: "sha256:{{ nextcloud_tarball_url }}.sha256"
+        mode: "0644"
+
+    - name: Unpack the Nextcloud release
+      ansible.builtin.unarchive:
+        src: "{{ nextcloud_staging_dir }}/nextcloud.tar.bz2"
+        dest: "{{ nextcloud_staging_dir }}"
+        remote_src: true
+
+    # Same exclude list as the Docker image (upgrade.exclude). version.php goes in last, so the tree
+    # never claims the new version while the old code is still in place.
+    - name: Replace the Nextcloud code
+      ansible.builtin.command:
+        argv:
+          - rsync
+          - -rlD
+          - --delete
+          - --chown=www-data:www-data
+          - --exclude=/config/
+          - --exclude=/data/
+          - --exclude=/custom_apps/
+          - --exclude=/themes/
+          - --exclude=/version.php
+          - --exclude=/nextcloud-init-sync.lock
+          - "{{ nextcloud_staging_dir }}/nextcloud/"
+          - "{{ nextcloud_webroot }}/"
+      changed_when: true
+
+    - name: Install the new version.php
+      ansible.builtin.copy:
+        src: "{{ nextcloud_staging_dir }}/nextcloud/version.php"
+        dest: "{{ nextcloud_webroot }}/version.php"
+        remote_src: true
+        owner: www-data
+        group: www-data
+        mode: "0644"
+
+    # Drop the old code from opcache before occ and the web workers load it
+    - name: Restart PHP-FPM
+      ansible.builtin.systemd:
+        name: "php{{ nextcloud_php_version }}-fpm"
+        state: restarted
+
+    - name: Run occ upgrade
+      ansible.builtin.command:
+        argv: [php, occ, upgrade, --no-interaction]
+        chdir: "{{ nextcloud_webroot }}"
+      become: true
+      become_user: www-data
+      changed_when: true
+
+    - name: Add missing database indices
+      ansible.builtin.command:
+        argv: [php, occ, db:add-missing-indices]
+        chdir: "{{ nextcloud_webroot }}"
+      become: true
+      become_user: www-data
+      changed_when: true
+
+    - name: Turn off maintenance mode
+      ansible.builtin.command:
+        argv: [php, occ, maintenance:mode, --off]
+        chdir: "{{ nextcloud_webroot }}"
+      become: true
+      become_user: www-data
+      changed_when: true
+
+    - name: Remove the staging directory
+      ansible.builtin.file:
+        path: "{{ nextcloud_staging_dir }}"
+        state: absent
+
+  rescue:
+    - name: Stop after a failed upgrade
+      ansible.builtin.fail:
+        msg: >-
+          The upgrade to {{ nextcloud_version }} failed at "{{ ansible_failed_task.name }}"; Nextcloud is
+          left in maintenance mode. Fix it and rerun the role, or roll back on {{ nextcloud_pve_host }} with
+          "pct rollback {{ nextcloud_pve_vmid }} pre_nextcloud_{{ nextcloud_version | replace('.', '_') }}"
+          and turn maintenance mode off.
+
+- name: Start the Nextcloud cron timer
+  ansible.builtin.systemd:
+    name: nextcloud-cron.timer
+    state: started
+  when: nextcloud_services_enabled | bool
+
+- name: Note the snapshot to delete
+  ansible.builtin.debug:
+    msg: >-
+      Upgraded to {{ nextcloud_version }}. Once the clients work, delete the snapshot on {{ nextcloud_pve_host }}:
+      pct delsnapshot {{ nextcloud_pve_vmid }} pre_nextcloud_{{ nextcloud_version | replace('.', '_') }}

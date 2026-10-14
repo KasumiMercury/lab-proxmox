@@ -84,6 +84,24 @@
         "custom.grafana-dashboards"
       ],
       "commitMessageTopic": "Grafana dashboard {{depName}} ({{packageName}})"
+    },
+    {
+      "description": "Nextcloud releases are tagged vX.Y.Z (release candidates excluded); one PR per major, as it upgrades one major at a time",
+      "matchPackageNames": [
+        "nextcloud/server"
+      ],
+      "extractVersion": "^v(?<version>\\d+\\.\\d+\\.\\d+)$",
+      "separateMultipleMajor": true
+    },
+    {
+      "description": "A Nextcloud major may need another PHP or PostgreSQL; approve it on the Dependency Dashboard",
+      "matchPackageNames": [
+        "nextcloud/server"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
     }
   ]
 }

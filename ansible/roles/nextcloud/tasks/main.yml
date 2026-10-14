@@ -56,6 +56,8 @@
       - python3-psycopg2
       - "tailscale={{ nextcloud_tailscale_version }}"
       - rsync
+      # Release tarballs (tasks/upgrade.yml) are .tar.bz2
+      - bzip2
     state: present
     update_cache: true
     # Refresh right away when a repository was just added
@@ -185,7 +187,7 @@
   ansible.builtin.stat:
     path: "{{ nextcloud_webroot }}/config/config.php"
   register: nextcloud_config
-  tags: [db, config]
+  tags: [db, config, upgrade]
 
 # The database password is kept in config.php (migrated from the old server)
 - name: Read the database password from config.php
@@ -240,7 +242,21 @@
   changed_when: false
   failed_when: false
   when: nextcloud_config.stat.exists
-  tags: [config]
+  tags: [config, upgrade]
+
+- name: Upgrade Nextcloud to {{ nextcloud_version }}
+  ansible.builtin.include_tasks:
+    file: upgrade.yml
+    apply:
+      tags: [upgrade]
+  vars:
+    nextcloud_running: "{{ nextcloud_status.stdout | from_json }}"
+    nextcloud_running_version: "{{ nextcloud_running.versionstring }}"
+  when:
+    - (nextcloud_status.stdout | default('{}') | from_json).installed | default(false)
+    - (nextcloud_status.stdout | from_json).versionstring != nextcloud_version
+      or (nextcloud_status.stdout | from_json).needsDbUpgrade
+  tags: [upgrade]
 
 # Reverse proxy settings (replace TRUSTED_PROXIES / OVERWRITEPROTOCOL of the Docker image) and the maintenance window
 - name: Set Nextcloud system config

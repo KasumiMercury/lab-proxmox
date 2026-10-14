@@ -16,6 +16,12 @@
 - `playbooks/setup-pve.yml` (`task pve:setup`): Proxmox node tuning on the static `inventory/hosts.yml`. Role `pve_nvme_power` limits NVMe APST on hod (kernel command line for the next boot, sysfs for the running system)
 - `playbooks/setup-zabbix.yml` (`task zabbix:setup`): role `zabbix_server` on strix and `zabbix_agent` on the Proxmox nodes (static `inventory/hosts.yml`); see "Zabbix" in the top-level README
 
+## Versions
+- Every version a role installs is a variable in `roles/<role>/defaults/main.yml` with a `# renovate: datasource=... depName=... [registryUrl=...]` comment on the line above; Renovate (custom regex manager in `../renovate.json`) opens the bump PRs, and rerunning the playbook applies them
+- Covered: Docker images, release binaries (vmagent), PyPI (pve-exporter), Grafana plugins and dashboards, the Nextcloud code (`nextcloud_version`), and packages from vendor apt repositories pinned as `pkg=<version>` (Tailscale, `datasource=deb`)
+- Not pinned: packages from the distribution (security updates) and the major series that need a migration of their own (`nextcloud_php_version`, `nextcloud_pg_version`, `zabbix_agent_series`)
+- Nextcloud: a different `nextcloud_version` makes the role snapshot the CT on yesod, replace the code from the release tarball and run `occ upgrade` (`roles/nextcloud/tasks/upgrade.yml`; only that part: `task ansible:run TF_ENV=nextcloud -- --tags upgrade`). One major at a time; Renovate asks for approval on the Dependency Dashboard for a major. Delete the snapshot `pre_nextcloud_<version>` once the clients work
+
 ## SSH Auth
 - `ANSIBLE_USE_PASSWORDS`: `true` or `false` (default: `false`) to include/exclude passwords in inventory
 
