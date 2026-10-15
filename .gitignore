@@ -23,3 +23,6 @@ ansible/artifacts/*
 
 # Local-only notes (may contain sensitive details)
 /docs/
+
+.DS_Store
+
