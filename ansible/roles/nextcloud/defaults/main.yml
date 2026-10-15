@@ -8,7 +8,7 @@ nextcloud_webroot: /var/www/html
 # Release of the Nextcloud code; when it differs from the running one the role upgrades the tree
 # (tasks/upgrade.yml). Only one major at a time, and check the PHP and PostgreSQL support first.
 # renovate: datasource=github-releases depName=nextcloud/server
-nextcloud_version: 34.0.4
+nextcloud_version: 34.0.5
 # The Proxmox node (yesod) and container id of this CT, for the snapshot taken before an upgrade.
 # An address, not an inventory name: task ansible:run only loads the generated nextcloud.ini.
 nextcloud_pve_host: 192.168.20.20
