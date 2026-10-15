@@ -6,6 +6,7 @@ provider "registry.terraform.io/siderolabs/talos" {
   constraints = "0.12.0"
   hashes = [
     "h1:MROf5tBE/arrhUXKFBDxVIV2GEp++m+ZfmeEcCBVmUA=",
+    "h1:qnBh8ioMyvKfU0NHIKCqYK5yvADxz0WjnS2Jzv1+54Y=",
     "zh:0fa82a384b25a58b65523e0ea4768fa1212b1f5cfc0c9379d31162454fedcc9d",
     "zh:361543a6a5fae426bffb2930cbfd76de3d2763ca262cfc7d940a2dd6a6080043",
     "zh:84ec4c9552435598c03f9e70172ac6b728cd1d2b2fb82fb27ce4021dc32122a1",
@@ -27,6 +28,7 @@ provider "registry.terraform.io/telmate/proxmox" {
   version     = "3.0.2-rc10"
   constraints = "3.0.2-rc10"
   hashes = [
+    "h1:29vtGd5fVXBZ30MG7zqOqJU+kBPk6SPZOPDKT3sq8HY=",
     "h1:XMRlFfI01PogE3ubwZjruEduhWfAIVHt+ylYrcc6ulM=",
     "zh:07bac36b8bc00df21791a2b5391568b235b2d117ff1bec51b3af19b03fed766e",
     "zh:0970846520becaa95743e07671dafb261a49658fef4c0518a63d5279e0b0777c",
