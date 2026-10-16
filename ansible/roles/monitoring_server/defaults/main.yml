@@ -21,7 +21,7 @@ grafana_version: 13.2.4
 grafana_image: "grafana/grafana:{{ grafana_version }}"
 # Data source plugin for VictoriaLogs, installed by Grafana at startup
 # renovate: datasource=custom.grafana-plugins depName=victoriametrics-logs-datasource
-grafana_victorialogs_plugin_version: 0.32.0
+grafana_victorialogs_plugin_version: 0.33.1
 # Only used when Grafana initializes its database (first start); change it in the UI afterwards.
 # Generated once on the controller and kept in the gitignored artifacts directory.
 grafana_admin_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/../artifacts/strix-grafana-admin-password chars=ascii_letters,digits length=24') }}"
