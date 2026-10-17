@@ -69,7 +69,8 @@ resource "proxmox_vm_qemu" "node" {
     firewall = true
   }
 
-  power_state = "running"
+  power_state        = "running"
+  start_at_node_boot = true
 
   # Same workaround as modules/proxmox_cloudinit (provider reads an unset block back as -1s)
   startup_shutdown {
