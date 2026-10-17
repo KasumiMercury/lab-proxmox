@@ -17,6 +17,27 @@
   ansible.builtin.command: sshd -t
   changed_when: false
 
+- name: Fetch the GitHub keys
+  ansible.builtin.uri:
+    url: "{{ pve_hardening_github_keys_url }}"
+    return_content: true
+  register: pve_hardening_github_keys
+  check_mode: false
+  run_once: true
+
+- name: Check the GitHub keys
+  ansible.builtin.assert:
+    that: pve_hardening_github_keys.content is match('(ssh-|ecdsa-|sk-)')
+    fail_msg: "{{ pve_hardening_github_keys_url }} returned no SSH keys"
+  run_once: true
+
+- name: Keep the GitHub keys in root's authorized_keys
+  ansible.builtin.blockinfile:
+    path: /etc/pve/priv/authorized_keys
+    marker: "# {mark} GitHub keys ({{ pve_hardening_github_keys_url }})"
+    block: "{{ pve_hardening_github_keys.content | trim }}"
+  run_once: true
+
 - name: Install unattended-upgrades
   ansible.builtin.apt:
     name: unattended-upgrades
