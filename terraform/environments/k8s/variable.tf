@@ -28,9 +28,9 @@ variable "nameserver" {
 }
 
 variable "admin_cidrs" {
-  description = "Networks allowed to reach the Talos API and the Kubernetes API (the admin LAN and the tailnet)"
+  description = "Networks allowed to reach the Talos API and the Kubernetes API (the admin LAN, the tailnet and hod as the SSH jump host)"
   type        = list(string)
-  default     = ["192.168.0.0/24", "100.64.0.0/10"]
+  default     = ["192.168.0.0/24", "100.64.0.0/10", "192.168.20.10/32"]
 }
 
 variable "pod_subnet" {

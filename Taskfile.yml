@@ -142,6 +142,26 @@ tasks:
         terraform output -raw kubeconfig > ../../../ansible/artifacts/{{.TF_ENV}}.kubeconfig
         terraform output -raw talosconfig > ../../../ansible/artifacts/{{.TF_ENV}}.talosconfig
         echo "export KUBECONFIG=$(realpath ../../../ansible/artifacts/{{.TF_ENV}}.kubeconfig) TALOSCONFIG=$(realpath ../../../ansible/artifacts/{{.TF_ENV}}.talosconfig)"
+      - task: k8s:hod-config
+
+  k8s:hod-config:
+    desc: Write ansible/artifacts/<env>.hod.kubeconfig, which reaches the API through the SOCKS proxy of k8s:tunnel
+    vars:
+      PORT: '{{.PORT | default "1080"}}'
+    cmds:
+      - |
+        touch ansible/artifacts/{{.TF_ENV}}.hod.kubeconfig
+        chmod 600 ansible/artifacts/{{.TF_ENV}}.hod.kubeconfig
+        yq '.clusters[].cluster.proxy-url = "socks5://127.0.0.1:{{.PORT}}"' ansible/artifacts/{{.TF_ENV}}.kubeconfig > ansible/artifacts/{{.TF_ENV}}.hod.kubeconfig
+        echo "export KUBECONFIG=$(realpath ansible/artifacts/{{.TF_ENV}}.hod.kubeconfig)"
+
+  k8s:tunnel:
+    desc: Open a SOCKS proxy on localhost through root@hod over the tailnet, for <env>.hod.kubeconfig (Ctrl-C to stop)
+    vars:
+      PORT: '{{.PORT | default "1080"}}'
+      JUMP_HOST: '{{.JUMP_HOST | default "root@hod"}}'
+    cmds:
+      - ssh -N -D 127.0.0.1:{{.PORT}} -o ExitOnForwardFailure=yes {{.JUMP_HOST}}
 
   k8s:bootstrap:
     desc: Install Cilium and Argo CD on a fresh Talos cluster (SEALED_SECRETS_KEY=<file> restores the sealed-secrets key first)

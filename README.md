@@ -63,6 +63,15 @@ Steps (from this repository unless noted):
 6. In lab-argo: `task bootstrap` (applies the root app-of-apps `bootstrap/root.yaml`; lab-argo's Taskfile uses the same kubeconfig by default). `task argocd:password TF_ENV=k8s` prints the initial admin password, `task argocd:port-forward TF_ENV=k8s` exposes the UI at `http://localhost:8080`; on the tailnet it is at `https://argocd.<tailnet>.ts.net`
 7. Without a restored key, seal the credentials again in lab-argo once `sealed-secrets` is Healthy (`task seal:*`, see its README)
 
+### Off the LAN (through hod)
+The Talos host firewall admits the Talos API and the Kubernetes API from the cluster and `admin_cidrs` (the admin LAN, the tailnet and hod `192.168.20.10`). Away from the LAN, kubectl reaches the API through an SSH SOCKS proxy on hod over the tailnet:
+```bash
+task k8s:tunnel                     # ssh -N -D 127.0.0.1:1080 root@hod; keep it running
+export KUBECONFIG=$PWD/ansible/artifacts/k8s.hod.kubeconfig
+kubectl get nodes
+```
+`k8s.hod.kubeconfig` is `k8s.kubeconfig` with `proxy-url: socks5://127.0.0.1:1080`; `task k8s:config` writes both (`task k8s:hod-config` alone derives it from an existing kubeconfig). `PORT=` changes the local port for both tasks. talosctl does not use the SOCKS proxy.
+
 Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`), or in Grafana as `{namespace="talos"}`. A shell on a node: `kubectl debug node/<name> -it --profile=sysadmin --image=nicolaka/netshoot` (the host filesystem is under `/host`; Talos has no shell of its own).
 
 ## Samba (samba environment)
