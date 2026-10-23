@@ -226,8 +226,8 @@
          or current.operations[0].operationtype != '0'
          or current.operations[0].opmessage.mediatypeid != zabbix_slack_mediatypeid
          or current.operations[0].opmessage_usr | map(attribute='userid') | list != [zabbix_admin_userid]
-         or current.recoveryOperations | map(attribute='operationtype') | list != ['11']
-         or current.updateOperations | map(attribute='operationtype') | list != ['12'])
+         or current.recovery_operations | map(attribute='operationtype') | list != ['11']
+         or current.update_operations | map(attribute='operationtype') | list != ['12'])
   vars:
     current: "{{ zabbix_slack_action_existing.json.result[0] }}"
     current_conditions: >-
