@@ -6,7 +6,7 @@ zabbix_dir: /srv/zabbix
 # before taking a TimescaleDB minor that Zabbix does not list yet (Renovate asks for approval).
 # The PostgreSQL major (-pg17) cannot be bumped in place.
 # renovate: datasource=docker depName=timescale/timescaledb
-timescaledb_version: 2.29.2-pg17
+timescaledb_version: 2.31.0-pg17
 timescaledb_image: "timescale/timescaledb:{{ timescaledb_version }}"
 # timescaledb-tune sizes PostgreSQL for this much memory; only applied when the database is created
 timescaledb_tune_memory: 1GB
@@ -16,7 +16,7 @@ timescaledb_max_connections: 100
 
 # One tag for server, frontend and agent (Renovate compares only the ubuntu-x.y.z tags)
 # renovate: datasource=docker depName=zabbix/zabbix-server-pgsql
-zabbix_version: ubuntu-7.4.15
+zabbix_version: ubuntu-7.4.16
 zabbix_server_image: "zabbix/zabbix-server-pgsql:{{ zabbix_version }}"
 zabbix_web_image: "zabbix/zabbix-web-nginx-pgsql:{{ zabbix_version }}"
 zabbix_agent_image: "zabbix/zabbix-agent2:{{ zabbix_version }}"
@@ -37,7 +37,7 @@ zabbix_slack_bot_token: "{{ vault_slack_bot_token | default('') }}"
 # Uses the OAuth client of the monitoring_server role (vault_tailscale_oauth_client_secret, tag:strix).
 zabbix_tailscale_hostname: zabbix
 # renovate: datasource=docker depName=tailscale/tailscale
-zabbix_tailscale_version: v1.104.1
+zabbix_tailscale_version: v1.104.2
 zabbix_tailscale_image: "tailscale/tailscale:{{ zabbix_tailscale_version }}"
 zabbix_tailscale_oauth_client_secret: "{{ vault_tailscale_oauth_client_secret | default('') }}"
 zabbix_tailscale_tags: tag:strix
