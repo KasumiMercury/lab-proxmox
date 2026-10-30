@@ -3,7 +3,7 @@
 monitoring_dir: /srv/monitoring
 
 # renovate: datasource=docker depName=victoriametrics/victoria-metrics
-victoriametrics_version: v1.154.1
+victoriametrics_version: v1.155.0
 victoriametrics_image: "victoriametrics/victoria-metrics:{{ victoriametrics_version }}"
 victoriametrics_retention: 1y
 # Remote write endpoint for the vmagents on the Proxmox nodes (plus 127.0.0.1 for debugging)
@@ -17,7 +17,7 @@ victorialogs_retention: 90d
 victorialogs_listen_address: "{{ lan_address }}"
 
 # renovate: datasource=docker depName=grafana/grafana
-grafana_version: 13.2.4
+grafana_version: 13.3.0
 grafana_image: "grafana/grafana:{{ grafana_version }}"
 # Data source plugin for VictoriaLogs, installed by Grafana at startup
 # renovate: datasource=custom.grafana-plugins depName=victoriametrics-logs-datasource
@@ -40,7 +40,7 @@ grafana_dashboards:
 # names and the host's tailscaled stays untouched. "grafana" is taken by the k8s Grafana.
 grafana_tailscale_hostname: pve-grafana
 # renovate: datasource=docker depName=tailscale/tailscale
-tailscale_version: v1.104.2
+tailscale_version: v1.104.4
 tailscale_image: "tailscale/tailscale:{{ tailscale_version }}"
 # OAuth client (scope auth_keys, tag below) shared by the Tailscale containers on strix;
 # the secret is in inventory/host_vars/strix/secrets.sops.yaml
