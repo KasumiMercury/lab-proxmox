@@ -32,7 +32,7 @@ grafana_admin_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/
 # dashboards that use an import-time input instead of a data source variable.
 grafana_dashboards:
   - { id: 10347, revision: 5, file: proxmox, datasource_input: DS_PROMETHEUS }
-  - { id: 1860, revision: 45, file: node-exporter-full }
+  - { id: 1860, revision: 46, file: node-exporter-full }
   - { id: 2842, revision: 18, file: ceph-cluster }
 
 # Grafana is published on the tailnet as its own node (https://<hostname>.<tailnet>.ts.net) by a
