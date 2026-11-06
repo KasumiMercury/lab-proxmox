@@ -18,7 +18,7 @@ vmagent_memory_allowed: 256MiB
 
 # Not packaged for Debian trixie, so it is installed from PyPI into a venv
 # renovate: datasource=pypi depName=prometheus-pve-exporter
-pve_exporter_version: 3.10.2
+pve_exporter_version: 3.11.0
 pve_exporter_dir: /opt/prometheus-pve-exporter
 pve_exporter_config: /etc/prometheus/pve.yml
 # Read-only API user (PVEAuditor on /) and its token
