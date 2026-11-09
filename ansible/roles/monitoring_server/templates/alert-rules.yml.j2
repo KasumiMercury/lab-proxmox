@@ -55,9 +55,15 @@
   },
   {
     'uid': 'ceph-health-warn', 'title': 'Ceph HEALTH_WARN', 'severity': 'warning', 'for': '5m',
-    'expr': 'ceph_health_status',
-    'evaluator': {'type': 'within_range', 'params': [0.5, 1.5]},
-    'summary': 'Ceph reports HEALTH_WARN (ceph health detail)',
+    'expr': 'max by (name) (ceph_health_detail{severity="HEALTH_WARN", name!="BLUESTORE_SLOW_OP_ALERT"})',
+    'evaluator': {'type': 'gt', 'params': [0]},
+    'summary': 'Ceph reports HEALTH_WARN {{ .Labels.name }} (ceph health detail)',
+  },
+  {
+    'uid': 'ceph-slow-ops', 'title': 'Ceph BlueStore slow operations recurring', 'severity': 'warning', 'for': '0s',
+    'expr': '24 * avg_over_time(max(ceph_health_detail{name="BLUESTORE_SLOW_OP_ALERT"})[24h:1m])',
+    'evaluator': {'type': 'gt', 'params': [grafana_alert_ceph_slow_op_hours]},
+    'summary': 'BLUESTORE_SLOW_OP_ALERT was raised for {{ humanize .Values.A.Value }} of the last 24 hours (ceph health detail, /var/log/ceph/ceph-osd.N.log)',
   },
   {
     'uid': 'ceph-health-err', 'title': 'Ceph HEALTH_ERR', 'severity': 'critical', 'for': '1m',

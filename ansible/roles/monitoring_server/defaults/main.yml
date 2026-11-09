@@ -68,6 +68,7 @@ grafana_alert_running_guests: k8s-.*|gnosis|athanor
 # Used share of a Proxmox storage / of a Ceph pool (its max_avail already accounts for replication)
 grafana_alert_storage_usage: 0.85
 grafana_alert_ceph_pool_usage: 0.75
+grafana_alert_ceph_slow_op_hours: 3
 # The VMs leave the nodes little headroom and swap is accepted as the overflow (OSDs can grow past
 # osd_memory_target during recovery): warn before the margin is gone, and when swapped pages are read back
 grafana_alert_memory_available: 1073741824
