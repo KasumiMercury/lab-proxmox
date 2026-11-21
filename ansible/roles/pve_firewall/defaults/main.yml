@@ -25,6 +25,7 @@ pve_firewall_guests:
   - vmid: 106
     rules:
       - IN ACCEPT -source 192.168.110.38,192.168.110.39 -p tcp -dport 3552 -log nolog # Arcane agents (binah, chesed)
+      - IN ACCEPT -source 192.168.110.38,192.168.110.39 -p tcp -dport 4318 -log nolog # OTLP from the Arcane agents
       - IN SSH(ACCEPT) -source +dc/management -log nolog
       - IN Ping(ACCEPT) -source +dc/management -log nolog
       - IN ACCEPT -p udp -dport 41641 -log nolog # Tailscale direct connections
