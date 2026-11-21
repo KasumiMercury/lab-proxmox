@@ -1,0 +1,8 @@
+---
+- import_playbook: setup.yml
+
+- name: Setup Immich
+  hosts: immich_immich
+  become: true
+  roles:
+    - immich

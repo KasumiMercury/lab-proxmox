@@ -1,0 +1,4 @@
+services:
+  immich-server:
+    ports: !override
+      - 127.0.0.1:2283:2283
