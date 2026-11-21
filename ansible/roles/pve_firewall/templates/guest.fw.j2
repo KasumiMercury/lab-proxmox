@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[OPTIONS]
+
+enable: 1
+policy_in: DROP
+
+[RULES]
+
+{% for r in guest.rules %}
+{{ r }}
+{% endfor %}

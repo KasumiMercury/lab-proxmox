@@ -23,6 +23,17 @@
                                 'content': lookup('ansible.builtin.template', 'cluster.fw.j2')}] }}
   run_once: true
 
+- name: Add the guest firewalls
+  ansible.builtin.set_fact:
+    pve_firewall_files: >-
+      {{ pve_firewall_files + [{
+           'dest': '/etc/pve/firewall/' ~ guest.vmid ~ '.fw',
+           'content': lookup('ansible.builtin.template', 'guest.fw.j2', template_vars={'guest': guest})}] }}
+  loop: "{{ pve_firewall_guests }}"
+  loop_control:
+    loop_var: guest
+  run_once: true
+
 - name: Read the current firewall files
   ansible.builtin.slurp:
     src: "{{ item.dest }}"

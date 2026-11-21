@@ -1,0 +1,90 @@
+---
+- name: Add the Tailscale apt repository
+  ansible.builtin.deb822_repository:
+    name: tailscale
+    uris: https://pkgs.tailscale.com/stable/ubuntu
+    suites: "{{ ansible_distribution_release }}"
+    components: main
+    signed_by: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"
+  register: arcane_tailscale_repo
+  tags: [tailscale]
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: "tailscale={{ arcane_tailscale_version }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ 0 if arcane_tailscale_repo is changed else 3600 }}"
+  tags: [tailscale]
+
+- name: Run tailscaled with userspace networking
+  ansible.builtin.lineinfile:
+    path: /etc/default/tailscaled
+    regexp: "^FLAGS="
+    line: 'FLAGS="--tun=userspace-networking"'
+  notify: restart tailscaled
+  tags: [tailscale]
+
+- name: Create the tailscaled drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/tailscaled.service.d
+    state: directory
+    mode: "0755"
+  tags: [tailscale]
+
+- name: Restart tailscaled whenever it exits
+  ansible.builtin.copy:
+    content: |
+      [Service]
+      Restart=always
+    dest: /etc/systemd/system/tailscaled.service.d/restart.conf
+    mode: "0644"
+  notify: reload systemd
+  tags: [tailscale]
+
+- name: Flush handlers before starting tailscaled
+  ansible.builtin.meta: flush_handlers
+  tags: [tailscale]
+
+- name: Start tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: true
+    state: started
+  tags: [tailscale]
+
+- name: Check Tailscale login state
+  ansible.builtin.command: tailscale status --json
+  register: arcane_ts_status
+  changed_when: false
+  failed_when: false
+  until: (arcane_ts_status.stdout | default('{}') | from_json).BackendState | default('') in ['Running', 'NeedsLogin']
+  retries: 10
+  delay: 3
+  tags: [tailscale, arcane]
+
+- name: Use the tailnet name as the app URL
+  ansible.builtin.set_fact:
+    arcane_app_url: "https://{{ (arcane_ts_status.stdout | from_json).Self.DNSName | regex_replace('\\.$', '') }}"
+  when: (arcane_ts_status.stdout | from_json).BackendState == 'Running'
+  tags: [tailscale, arcane]
+
+- name: Check tailscale serve config
+  ansible.builtin.command: tailscale serve status --json
+  register: arcane_ts_serve
+  changed_when: false
+  when: (arcane_ts_status.stdout | from_json).BackendState == 'Running'
+  tags: [tailscale]
+
+- name: Serve Arcane over HTTPS on the tailnet
+  ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:3552
+  when:
+    - arcane_ts_serve is not skipped
+    - (arcane_ts_serve.stdout | default('{}') | from_json).Web | default({}) | length == 0
+  tags: [tailscale]
+
+- name: Warn when Tailscale is not logged in
+  ansible.builtin.debug:
+    msg: Run "tailscale up --advertise-tags=tag:container" in the container and rerun this role.
+  when: (arcane_ts_status.stdout | from_json).BackendState != 'Running'
+  tags: [tailscale]

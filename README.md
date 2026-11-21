@@ -95,10 +95,11 @@ Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`),
 
 ## Arcane (arcane environment)
 `task deploy TF_ENV=arcane` creates three unprivileged LXCs and runs [Arcane](https://getarcane.app/docs/get-started/lxc-container) with Docker Compose in `/opt/arcane` (`ansible/playbooks/setup-arcane.yml`, role `arcane`).
-- `kether` (VMID 106, hod, `192.168.110.37`, role `manager`): the Arcane manager, `http://192.168.110.37:3552` on the LAN. hod reaches 192.168.110.0/24 through `vmbr100` (untagged), yesod and netzach through `vmbr0` with tag 100
+- `kether` (VMID 106, hod, `192.168.110.37`, role `manager`): the Arcane manager. The UI is published to the tailnet (not the LAN) by `tailscale serve` as `https://kether.<tailnet>.ts.net`, which is also `ARCANE_APP_URL`. Port 3552 stays published on the LAN for the agents only: the PVE guest firewall of CT 106 (`pve_firewall_guests` in the `pve_firewall` role, `task pve:firewall`) admits 3552 from binah and chesed, SSH and ping from the `management` ipset, and Tailscale's UDP 41641, and drops the rest. hod reaches 192.168.110.0/24 through `vmbr100` (untagged), yesod and netzach through `vmbr0` with tag 100
 - `binah` (VMID 107, yesod, `192.168.110.38`) and `chesed` (VMID 108, netzach, `192.168.110.39`), role `agent`: Arcane agents. An agent opens no port; it connects to the manager (`ARCANE_MANAGER_API_URL`), and the manager manages each agent's Docker as its own environment. Only the agents are spread over the nodes; there is one manager
 - The manager's encryption key is generated once into `/opt/arcane/.env`. `arcane_version` pins both images
 - First login: user `arcane`, the password is in `/var/lib/docker/volumes/arcane_arcane-data/_data/initial-admin-password` on kether. The manager asks for a new password before anything else (the API answers 403 until then)
+- Tailscale login is manual: `tailscale up --advertise-tags=tag:container` on kether, then rerun the role
 - Agents start only after they have a token: create one in Agents → Enrollment Tokens (Max Uses 2 covers both), then `task ans:run TF_ENV=arcane -- --limit arcane_agent --tags arcane -e arcane_agent_token=<token>`. The token is written to `/opt/arcane/.env` on the agents; once enrolled, the agent keeps its identity in its data volume
 - Off the LAN: `task ans:run TF_ENV=arcane -- --ssh-common-args='-o ProxyJump=root@hod'`
 

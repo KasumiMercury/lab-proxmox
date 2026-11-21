@@ -29,6 +29,14 @@
     cache_valid_time: "{{ 0 if arcane_docker_repo is changed else 3600 }}"
   tags: [packages]
 
+- name: Set up Tailscale
+  ansible.builtin.include_tasks:
+    file: tailscale.yml
+    apply:
+      tags: [tailscale, arcane]
+  when: arcane_mode == 'manager'
+  tags: [tailscale, arcane]
+
 - name: Create the Arcane directory
   ansible.builtin.file:
     path: "{{ arcane_dir }}"

@@ -11,7 +11,7 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     env_file: .env
     environment:
-      - ARCANE_APP_URL={{ arcane_manager_url }}
+      - ARCANE_APP_URL={{ arcane_app_url }}
       - PUID=1000
       - PGID=1000
     restart: unless-stopped
