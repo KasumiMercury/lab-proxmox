@@ -7,3 +7,8 @@
   ansible.builtin.systemd:
     name: tailscaled
     state: restarted
+
+- name: restart otel-collector
+  ansible.builtin.command: docker compose restart otel-collector
+  args:
+    chdir: "{{ arcane_dir }}"

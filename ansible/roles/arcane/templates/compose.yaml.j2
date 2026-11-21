@@ -17,7 +17,21 @@ services:
       - ARCANE_APP_URL={{ arcane_app_url }}
       - PUID=1000
       - PGID=1000
+      - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_LOGS_EXPORTER=otlp
+      - OTEL_EXPORTER_OTLP_ENDPOINT={{ arcane_otel_collector_url }}
+      - OTEL_RESOURCE_ATTRIBUTES=host.name={{ inventory_hostname }}
     restart: unless-stopped
+{% if arcane_otel_upstream is defined %}
+  otel-collector:
+    image: otel/opentelemetry-collector:{{ arcane_otelcol_version }}
+    container_name: otel-collector
+    network_mode: host
+    volumes:
+      - ./otelcol.yaml:/etc/otelcol/config.yaml:ro
+    restart: unless-stopped
+{% endif %}
 {% else %}
   arcane-agent:
     image: ghcr.io/getarcaneapp/agent:{{ arcane_version }}
@@ -31,6 +45,11 @@ services:
     environment:
       - ARCANE_AGENT=true
       - ARCANE_MANAGER_API_URL={{ arcane_manager_url }}
+      - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_LOGS_EXPORTER=otlp
+      - OTEL_EXPORTER_OTLP_ENDPOINT={{ arcane_otel_collector_url }}
+      - OTEL_RESOURCE_ATTRIBUTES=host.name={{ inventory_hostname }}
     restart: unless-stopped
 {% endif %}
 volumes:

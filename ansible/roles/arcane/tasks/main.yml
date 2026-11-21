@@ -71,6 +71,15 @@
   register: arcane_env
   tags: [arcane]
 
+- name: Write the OpenTelemetry Collector config
+  ansible.builtin.template:
+    src: otelcol.yaml.j2
+    dest: "{{ arcane_dir }}/otelcol.yaml"
+    mode: "0644"
+  notify: restart otel-collector
+  when: arcane_otel_upstream is defined
+  tags: [arcane]
+
 - name: Write compose.yaml
   ansible.builtin.template:
     src: compose.yaml.j2

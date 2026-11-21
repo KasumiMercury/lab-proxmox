@@ -21,7 +21,7 @@
   ansible.builtin.lineinfile:
     path: /etc/default/tailscaled
     regexp: "^FLAGS="
-    line: 'FLAGS="--tun=userspace-networking"'
+    line: 'FLAGS="--tun=userspace-networking --outbound-http-proxy-listen=127.0.0.1:1055"'
   notify: restart tailscaled
   tags: [tailscale]
 
@@ -63,9 +63,10 @@
   delay: 3
   tags: [tailscale, arcane]
 
-- name: Use the tailnet name as the app URL
+- name: Use the tailnet names for the app URL and the OTLP endpoint
   ansible.builtin.set_fact:
     arcane_app_url: "https://{{ (arcane_ts_status.stdout | from_json).Self.DNSName | regex_replace('\\.$', '') }}"
+    arcane_otel_upstream: "https://otel.{{ (arcane_ts_status.stdout | from_json).MagicDNSSuffix }}"
   when: (arcane_ts_status.stdout | from_json).BackendState == 'Running'
   tags: [tailscale, arcane]
 
