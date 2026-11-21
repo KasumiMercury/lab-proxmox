@@ -85,6 +85,14 @@ Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`),
 - Samba passwords and the machine SID come from `passdb.tdb` / `secrets.tdb` of the old server, placed in `ansible/artifacts/samba/` (gitignored). The role copies them when present
 - `task ans:run TF_ENV=samba -- -e samba_services_enabled=false` configures everything but keeps smbd/nmbd/wsdd2 stopped (used while the old server is still up). Arguments after `--` go to `ansible-playbook`
 
+## Immich (immich environment)
+`task deploy TF_ENV=immich` creates the unprivileged LXC `chokmah` (VMID 105) on yesod and runs Immich with Docker Compose in `/opt/immich` (`ansible/playbooks/setup-immich.yml`, role `immich`).
+- Photos and videos (`UPLOAD_LOCATION`) live on `/mnt/monad/immich`, a 500GB mount point on `monad`, so the container stays on yesod. PostgreSQL (`/var/lib/immich/postgres`) and the Docker images stay on the rootfs (`local-lvm`)
+- `docker-compose.yml` is downloaded from the release named by `immich_version`; the server listens on `127.0.0.1:2283` only and is published to the tailnet (not the internet) by `tailscale serve` as `https://chokmah.<tailnet>.ts.net`
+- The database password is generated once into `/opt/immich/db_password` on the container
+- Tailscale login is manual: `tailscale up --advertise-tags=tag:container` in the container, then rerun the role
+- Off the LAN: `task ans:run TF_ENV=immich -- --ssh-common-args='-o ProxyJump=root@hod'`
+
 ## Monitoring (Proxmox nodes and strix)
 `task monitoring:setup` runs `ansible/playbooks/setup-monitoring.yml` against the static inventory `ansible/inventory/hosts.yml` (Proxmox nodes as root, the NAS strix as `mercury` over Tailscale; it asks for strix's sudo password).
 - strix (role `monitoring_server`): Docker Compose project `/srv/monitoring` with VictoriaMetrics (retention 1y, listening on `192.168.110.5:8428` and `127.0.0.1:8428`), VictoriaLogs (retention 90d, `192.168.110.5:9428` and `127.0.0.1:9428`), Grafana and a Tailscale container. Grafana listens on localhost only and is published by the Tailscale container as its own tailnet node, `https://pve-grafana.<tailnet>.ts.net` (`grafana` is the k8s Grafana). Each service on strix gets its own Tailscale container, so names do not collide and the host's tailscaled (SSH) is left alone. The VictoriaMetrics and VictoriaLogs data sources are provisioned (uids `victoriametrics`, `victorialogs`); Grafana installs the VictoriaLogs plugin (`victoriametrics-logs-datasource`, pinned) at startup through `GF_PLUGINS_PREINSTALL_SYNC`. The initial admin password is generated into `ansible/artifacts/strix-grafana-admin-password` (gitignored) and only applies on Grafana's first start

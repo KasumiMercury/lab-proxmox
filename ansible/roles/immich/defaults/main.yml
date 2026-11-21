@@ -1,0 +1,9 @@
+---
+# renovate: datasource=github-releases depName=immich-app/immich
+immich_version: v3.4.2
+immich_dir: /opt/immich
+immich_upload_location: /mnt/monad/immich
+immich_db_data_location: /var/lib/immich/postgres
+
+# renovate: datasource=deb depName=tailscale registryUrl=https://pkgs.tailscale.com/stable/ubuntu?suite=noble&components=main&binaryArch=amd64
+immich_tailscale_version: 1.104.5

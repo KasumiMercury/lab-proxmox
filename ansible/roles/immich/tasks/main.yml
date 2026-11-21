@@ -1,0 +1,166 @@
+---
+- name: Install apt module dependencies
+  ansible.builtin.apt:
+    name: [python3-debian]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [packages]
+
+- name: Add Docker and Tailscale apt repositories
+  ansible.builtin.deb822_repository:
+    name: "{{ item.name }}"
+    uris: "{{ item.uris }}"
+    suites: "{{ ansible_distribution_release }}"
+    components: "{{ item.components }}"
+    signed_by: "{{ item.key }}"
+  loop:
+    - name: docker
+      uris: https://download.docker.com/linux/ubuntu
+      components: stable
+      key: https://download.docker.com/linux/ubuntu/gpg
+    - name: tailscale
+      uris: https://pkgs.tailscale.com/stable/ubuntu
+      components: main
+      key: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"
+  loop_control:
+    label: "{{ item.name }}"
+  register: immich_repos
+  tags: [packages]
+
+- name: Install Docker and Tailscale
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+      - "tailscale={{ immich_tailscale_version }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ 0 if immich_repos is changed else 3600 }}"
+  tags: [packages]
+
+- name: Create Immich directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ immich_dir }}"
+    - "{{ immich_upload_location }}"
+    - "{{ immich_db_data_location | dirname }}"
+  tags: [immich]
+
+- name: Generate the database password
+  ansible.builtin.shell: umask 077 && openssl rand -hex 24 > db_password
+  args:
+    chdir: "{{ immich_dir }}"
+    creates: "{{ immich_dir }}/db_password"
+  tags: [immich]
+
+- name: Read the database password
+  ansible.builtin.slurp:
+    src: "{{ immich_dir }}/db_password"
+  register: immich_db_password
+  no_log: true
+  tags: [immich]
+
+- name: Download docker-compose.yml of {{ immich_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/immich-app/immich/releases/download/{{ immich_version }}/docker-compose.yml"
+    dest: "{{ immich_dir }}/docker-compose.yml"
+    mode: "0644"
+    force: true
+  tags: [immich]
+
+- name: Publish the server on localhost only
+  ansible.builtin.copy:
+    src: docker-compose.override.yml
+    dest: "{{ immich_dir }}/docker-compose.override.yml"
+    mode: "0644"
+  tags: [immich]
+
+- name: Write .env
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ immich_dir }}/.env"
+    mode: "0600"
+  no_log: true
+  tags: [immich]
+
+- name: Start Immich
+  community.docker.docker_compose_v2:
+    project_src: "{{ immich_dir }}"
+    state: present
+    pull: missing
+    remove_orphans: true
+  tags: [immich]
+
+- name: Run tailscaled with userspace networking
+  ansible.builtin.lineinfile:
+    path: /etc/default/tailscaled
+    regexp: "^FLAGS="
+    line: 'FLAGS="--tun=userspace-networking"'
+  notify: restart tailscaled
+  tags: [tailscale]
+
+- name: Create the tailscaled drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/tailscaled.service.d
+    state: directory
+    mode: "0755"
+  tags: [tailscale]
+
+- name: Restart tailscaled whenever it exits
+  ansible.builtin.copy:
+    content: |
+      [Service]
+      Restart=always
+    dest: /etc/systemd/system/tailscaled.service.d/restart.conf
+    mode: "0644"
+  notify: reload systemd
+  tags: [tailscale]
+
+- name: Flush handlers before starting tailscaled
+  ansible.builtin.meta: flush_handlers
+  tags: [tailscale]
+
+- name: Start tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: true
+    state: started
+  tags: [tailscale]
+
+- name: Check Tailscale login state
+  ansible.builtin.command: tailscale status --json
+  register: immich_ts_status
+  changed_when: false
+  failed_when: false
+  until: (immich_ts_status.stdout | default('{}') | from_json).BackendState | default('') in ['Running', 'NeedsLogin']
+  retries: 10
+  delay: 3
+  tags: [tailscale]
+
+- name: Check tailscale serve config
+  ansible.builtin.command: tailscale serve status --json
+  register: immich_ts_serve
+  changed_when: false
+  when: (immich_ts_status.stdout | from_json).BackendState == 'Running'
+  tags: [tailscale]
+
+- name: Serve Immich over HTTPS on the tailnet
+  ansible.builtin.command: tailscale serve --bg --https=443 http://127.0.0.1:2283
+  when:
+    - immich_ts_serve is not skipped
+    - (immich_ts_serve.stdout | default('{}') | from_json).Web | default({}) | length == 0
+  tags: [tailscale]
+
+- name: Warn when Tailscale is not logged in
+  ansible.builtin.debug:
+    msg: Run "tailscale up --advertise-tags=tag:container" in the container and rerun this role.
+  when: (immich_ts_status.stdout | from_json).BackendState != 'Running'
+  tags: [tailscale]
