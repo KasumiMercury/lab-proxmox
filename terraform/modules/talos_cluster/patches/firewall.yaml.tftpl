@@ -6,7 +6,7 @@ kind: NetworkDefaultActionConfig
 ingress: block
 ---
 # etcd, Cilium health/Hubble, ceph-csi, node-exporter, Cilium/Envoy metrics, kubelet, controller-manager,
-# scheduler, Alloy, trustd. Prometheus and Alloy scrape from pods.
+# scheduler, Alloy, trustd. vmagent and Alloy scrape from pods.
 apiVersion: v1alpha1
 kind: NetworkRuleConfig
 name: cluster-tcp
