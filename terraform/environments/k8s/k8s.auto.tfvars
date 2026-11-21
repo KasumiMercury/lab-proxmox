@@ -19,6 +19,7 @@ nodes = {
     vm_name        = "k8s-hod"
     ip_address     = "192.168.110.181"
     memory         = 10240
+    disk_size      = 64
     network_bridge = "vmbr100"
   }
   "netzach" = {
