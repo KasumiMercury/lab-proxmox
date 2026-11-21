@@ -28,7 +28,7 @@ nodes = {
     vmid           = 820
     vm_name        = "k8s-netzach"
     ip_address     = "192.168.110.182"
-    memory         = 6144
+    memory         = 10240
     network_bridge = "vmbr0"
     network_tag    = 100
   }

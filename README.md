@@ -34,7 +34,7 @@ The k8s environment is a Talos Linux cluster: `k8s-hod` is the control plane (it
 - VM settings follow the Talos Proxmox guide: VirtIO SCSI (not "single"), ballooning off, CPU type `x86-64-v3` (some images such as ceph-csi 3.18 need it), QEMU guest agent on
 - Ceph RBD volumes use the kernel client (krbd): Talos 1.14.1+ carries the backport for the aes256k cephx keys that Ceph 19.2.6+ issues
 - Cilium chart pin and values live in `cilium/` (`version.yaml`, `values.yaml`), a git submodule of [lab-cilium](https://github.com/KasumiMercury/lab-cilium) shared with the ArgoCD repo; run `git submodule update --init` after cloning. See `cilium/README.md` for the contract
-- Control plane VM has 8192 MB (`memory` in `k8s.auto.tfvars`), workers 4096 MB
+- Memory (`memory` in `k8s.auto.tfvars`): k8s-hod and k8s-netzach 10240 MB, k8s-yesod 6144 MB
 - `terraform/environments/k8s-test` is a single-node cluster on yesod (VM 919, `192.168.110.199`) with the same module and patches, for trying changes first. Destroy it when done
 
 ### Template
