@@ -1,0 +1,86 @@
+---
+- name: Install apt module dependencies
+  ansible.builtin.apt:
+    name: [python3-debian]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [packages]
+
+- name: Add the Docker apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    uris: https://download.docker.com/linux/ubuntu
+    suites: "{{ ansible_distribution_release }}"
+    components: stable
+    signed_by: https://download.docker.com/linux/ubuntu/gpg
+  register: arcane_docker_repo
+  tags: [packages]
+
+- name: Install Docker
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ 0 if arcane_docker_repo is changed else 3600 }}"
+  tags: [packages]
+
+- name: Create the Arcane directory
+  ansible.builtin.file:
+    path: "{{ arcane_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags: [arcane]
+
+- name: Generate the encryption key
+  ansible.builtin.shell: umask 077 && echo "ARCANE_ENCRYPTION_KEY=$(openssl rand -hex 32)" > .env
+  args:
+    chdir: "{{ arcane_dir }}"
+    creates: "{{ arcane_dir }}/.env"
+  when: arcane_mode == 'manager'
+  tags: [arcane]
+
+- name: Write the agent token
+  ansible.builtin.copy:
+    content: "ARCANE_AGENT_TOKEN={{ arcane_agent_token }}\n"
+    dest: "{{ arcane_dir }}/.env"
+    mode: "0600"
+  no_log: true
+  when:
+    - arcane_mode == 'agent'
+    - arcane_agent_token is defined
+  tags: [arcane]
+
+- name: Check .env
+  ansible.builtin.stat:
+    path: "{{ arcane_dir }}/.env"
+  register: arcane_env
+  tags: [arcane]
+
+- name: Write compose.yaml
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ arcane_dir }}/compose.yaml"
+    mode: "0644"
+  tags: [arcane]
+
+- name: Start Arcane
+  community.docker.docker_compose_v2:
+    project_src: "{{ arcane_dir }}"
+    state: present
+    pull: missing
+    remove_orphans: true
+  when: arcane_env.stat.exists
+  tags: [arcane]
+
+- name: Warn when the agent has no token
+  ansible.builtin.debug:
+    msg: Create an enrollment token in Arcane (Agents -> Enrollment Tokens) and rerun with -e arcane_agent_token=<token>.
+  when: not arcane_env.stat.exists
+  tags: [arcane]

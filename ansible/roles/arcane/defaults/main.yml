@@ -1,0 +1,6 @@
+---
+# renovate: datasource=docker depName=ghcr.io/getarcaneapp/manager
+arcane_version: v3.1.1
+arcane_dir: /opt/arcane
+arcane_mode: manager
+arcane_manager_url: "http://{{ hostvars[groups['arcane_manager'][0]].ansible_host }}:3552"

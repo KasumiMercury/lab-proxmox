@@ -1,0 +1,16 @@
+---
+- import_playbook: setup.yml
+
+- name: Setup the Arcane manager
+  hosts: arcane_manager
+  become: true
+  roles:
+    - arcane
+
+- name: Setup the Arcane agents
+  hosts: arcane_agent
+  become: true
+  roles:
+    - role: arcane
+      vars:
+        arcane_mode: agent

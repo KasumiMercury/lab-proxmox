@@ -93,6 +93,15 @@ Node logs: `talosctl -n <ip> logs kubelet` (also `etcd`, `containerd`, `dmesg`),
 - Tailscale login is manual: `tailscale up --advertise-tags=tag:container` in the container, then rerun the role
 - Off the LAN: `task ans:run TF_ENV=immich -- --ssh-common-args='-o ProxyJump=root@hod'`
 
+## Arcane (arcane environment)
+`task deploy TF_ENV=arcane` creates three unprivileged LXCs and runs [Arcane](https://getarcane.app/docs/get-started/lxc-container) with Docker Compose in `/opt/arcane` (`ansible/playbooks/setup-arcane.yml`, role `arcane`).
+- `kether` (VMID 106, hod, `192.168.110.37`, role `manager`): the Arcane manager, `http://192.168.110.37:3552` on the LAN. hod reaches 192.168.110.0/24 through `vmbr100` (untagged), yesod and netzach through `vmbr0` with tag 100
+- `binah` (VMID 107, yesod, `192.168.110.38`) and `chesed` (VMID 108, netzach, `192.168.110.39`), role `agent`: Arcane agents. An agent opens no port; it connects to the manager (`ARCANE_MANAGER_API_URL`), and the manager manages each agent's Docker as its own environment. Only the agents are spread over the nodes; there is one manager
+- The manager's encryption key is generated once into `/opt/arcane/.env`. `arcane_version` pins both images
+- First login: user `arcane`, the password is in `/var/lib/docker/volumes/arcane_arcane-data/_data/initial-admin-password` on kether. The manager asks for a new password before anything else (the API answers 403 until then)
+- Agents start only after they have a token: create one in Agents → Enrollment Tokens (Max Uses 2 covers both), then `task ans:run TF_ENV=arcane -- --limit arcane_agent --tags arcane -e arcane_agent_token=<token>`. The token is written to `/opt/arcane/.env` on the agents; once enrolled, the agent keeps its identity in its data volume
+- Off the LAN: `task ans:run TF_ENV=arcane -- --ssh-common-args='-o ProxyJump=root@hod'`
+
 ## Monitoring (Proxmox nodes and strix)
 `task monitoring:setup` runs `ansible/playbooks/setup-monitoring.yml` against the static inventory `ansible/inventory/hosts.yml` (Proxmox nodes as root, the NAS strix as `mercury` over Tailscale; it asks for strix's sudo password).
 - strix (role `monitoring_server`): Docker Compose project `/srv/monitoring` with VictoriaMetrics (retention 1y, listening on `192.168.110.5:8428` and `127.0.0.1:8428`), VictoriaLogs (retention 90d, `192.168.110.5:9428` and `127.0.0.1:9428`), Grafana and a Tailscale container. Grafana listens on localhost only and is published by the Tailscale container as its own tailnet node, `https://pve-grafana.<tailnet>.ts.net` (`grafana` is the k8s Grafana). Each service on strix gets its own Tailscale container, so names do not collide and the host's tailscaled (SSH) is left alone. The VictoriaMetrics and VictoriaLogs data sources are provisioned (uids `victoriametrics`, `victorialogs`); Grafana installs the VictoriaLogs plugin (`victoriametrics-logs-datasource`, pinned) at startup through `GF_PLUGINS_PREINSTALL_SYNC`. The initial admin password is generated into `ansible/artifacts/strix-grafana-admin-password` (gitignored) and only applies on Grafana's first start
