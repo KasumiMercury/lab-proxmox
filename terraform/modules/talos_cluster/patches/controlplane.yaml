@@ -19,7 +19,7 @@ kind: KubeNodeConfig
 taints:
   $patch: delete
 ---
-# Scraped by kube-prometheus-stack
+# Scraped by vmagent (victoria-metrics-k8s-stack in lab-argo)
 apiVersion: v1alpha1
 kind: KubeControllerManagerConfig
 extraArgs:
