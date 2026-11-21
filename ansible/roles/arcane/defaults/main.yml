@@ -1,0 +1,10 @@
+---
+# renovate: datasource=docker depName=ghcr.io/getarcaneapp/manager
+arcane_version: v3.1.1
+arcane_dir: /opt/arcane
+arcane_mode: manager
+arcane_manager_url: "http://{{ hostvars[groups['arcane_manager'][0]].ansible_host }}:3552"
+arcane_app_url: "{{ arcane_manager_url }}"
+
+# renovate: datasource=deb depName=tailscale registryUrl=https://pkgs.tailscale.com/stable/ubuntu?suite=noble&components=main&binaryArch=amd64
+arcane_tailscale_version: 1.104.5
