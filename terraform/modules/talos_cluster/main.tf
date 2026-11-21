@@ -56,6 +56,7 @@ resource "proxmox_vm_qemu" "node" {
         disk {
           storage = each.value.disk_storage
           size    = "${each.value.disk_size}G"
+          discard = true
         }
       }
     }
@@ -71,6 +72,7 @@ resource "proxmox_vm_qemu" "node" {
 
   power_state        = "running"
   start_at_node_boot = true
+  automatic_reboot   = false
 
   # Same workaround as modules/proxmox_cloudinit (provider reads an unset block back as -1s)
   startup_shutdown {
