@@ -9,6 +9,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - arcane-data:/app/data
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
+{% for f in ['cpuinfo', 'loadavg', 'meminfo', 'stat', 'swaps', 'uptime'] %}
+      - /proc/{{ f }}:/proc/{{ f }}:ro
+{% endfor %}
     env_file: .env
     environment:
       - ARCANE_APP_URL={{ arcane_app_url }}
